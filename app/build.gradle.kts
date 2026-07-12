@@ -18,6 +18,10 @@ android {
     composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
 }
 
+configurations.all {
+    exclude(group = "xpp3", module = "xpp3_min")
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.01.00")
     implementation(composeBom)
