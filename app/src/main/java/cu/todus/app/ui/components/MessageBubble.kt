@@ -1,5 +1,5 @@
 package cu.todus.app.ui.components
-import androidx.compose.foundation.border
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -10,7 +10,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cu.todus.app.ui.theme.ToDusColors
@@ -21,7 +25,11 @@ import java.util.*
 fun MessageBubble(text: String, time: Long, isMine: Boolean, state: String = "sent") {
     val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(time))
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp), horizontalAlignment = if (isMine) Alignment.End else Alignment.Start) {
-        Surface(modifier = Modifier.widthIn(max = 280.dp), shape = if (isMine) RoundedCornerShape(8.dp, 8.dp, 0.dp, 8.dp) else RoundedCornerShape(8.dp, 8.dp, 8.dp, 0.dp), color = if (isMine) Color.White else ToDusColors.Red, border = if (isMine) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)) else null) {
+        Surface(
+            modifier = Modifier.widthIn(max = 280.dp),
+            shape = if (isMine) RoundedCornerShape(8.dp, 8.dp, 0.dp, 8.dp) else RoundedCornerShape(8.dp, 8.dp, 8.dp, 0.dp),
+            color = if (isMine) Color.White else ToDusColors.Red
+        ) {
             Column(modifier = Modifier.padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 4.dp)) {
                 Text(text, style = MaterialTheme.typography.bodyLarge, color = if (isMine) Color.Black else Color.White, modifier = Modifier.padding(end = 40.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {

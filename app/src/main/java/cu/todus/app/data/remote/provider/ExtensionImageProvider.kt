@@ -1,11 +1,10 @@
 package cu.todus.app.data.remote.provider
 import cu.todus.app.data.remote.extension.image.ExtensionImage
-import org.jivesoftware.smack.packet.XmlEnvironment
 import org.jivesoftware.smack.provider.ExtensionElementProvider
 import org.xmlpull.v1.XmlPullParser
 
 class ExtensionImageProvider : ExtensionElementProvider<ExtensionImage>() {
-    override fun parse(parser: XmlPullParser, initialDepth: Int, xmlEnvironment: XmlEnvironment): ExtensionImage {
+    override fun parse(parser: XmlPullParser, initialDepth: Int): ExtensionImage {
         return ExtensionImage().apply {
             id = parser.getAttributeValue("", "i") ?: ""
             messageId = parser.getAttributeValue("", "mi") ?: ""

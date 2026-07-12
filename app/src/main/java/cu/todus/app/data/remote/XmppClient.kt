@@ -1,6 +1,5 @@
 package cu.todus.app.data.remote
 
-import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.jivesoftware.smack.chat2.ChatManager
@@ -32,7 +31,7 @@ class XmppClient {
                 .url("https://auth.todus.cu/v2/auth/token")
                 .header("Content-Type", "application/x-protobuf")
                 .header("User-Agent", "ToDus 2.1.2 Auth")
-                .post(okhttp3.RequestBody.create(okhttp3.MediaType.parse("application/x-protobuf"), body))
+                .post(RequestBody.create("application/x-protobuf".toMediaType(), body))
                 .build()
             val response = okHttpClient.newCall(request).execute()
             Result.success(response.body?.string() ?: "")
@@ -47,7 +46,7 @@ class XmppClient {
             _connectionState.value = ConnectionState.BEFORE_CONNECTED
             connection?.login(phone, jwt)
             _connectionState.value = ConnectionState.AUTHENTICATED
-            chatManager = ChatManager.getInstance(connection)
+            chatManager = ChatManager.getInstanceFor(connection)
             _connectionState.value = ConnectionState.CONNECTED
             Result.success(Unit)
         } catch (e: Exception) {
@@ -66,9 +65,13 @@ class XmppClient {
 
     suspend fun sendIqAndWait(xml: String): String = withContext(Dispatchers.IO) {
         try {
-            val stanza = org.jivesoftware.smack.util.StanzaBuilder.buildStanza(xml)
-            val response = connection?.sendIqRequestAndWaitForResponse(stanza as IQ)
-            response?.toXML()?.toString() ?: ""
+            connection?.let { conn ->
+                val parser = org.xmlpull.v1.XmlPullParserFactory.newInstance().newPullParser()
+                parser.setInput(xml.reader())
+                val builder = org.jivesoftware.smack.util.PacketParserUtils.parseIQ(parser)
+                val response = conn.sendIqRequestAndWaitForResponse(builder as IQ)
+                response?.toXML()?.toString() ?: ""
+            } ?: ""
         } catch (e: Exception) { "" }
     }
 
