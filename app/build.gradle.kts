@@ -16,11 +16,14 @@ android {
     }
     buildFeatures { compose = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = "17" }
 }
 
-configurations.all {
-    exclude(group = "xpp3", module = "xpp3_min")
-}
+configurations.all { exclude(group = "xpp3", module = "xpp3_min") }
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.01.00")
