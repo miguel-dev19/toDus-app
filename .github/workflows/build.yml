@@ -42,3 +42,5 @@ jobs:
       with:
         name: toDus-debug
         path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Clean Gradle cache
+        run: rm -rf ~/.gradle/caches/ 2>/dev/null || true
