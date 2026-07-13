@@ -14,7 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cu.todus.app.data.local.ToDusDatabase
-import cu.todus.app.data.local.entity.ContactEntity
+import cu.todus.app.ui.components.ContactListItem
 
 @Composable
 fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit) {
