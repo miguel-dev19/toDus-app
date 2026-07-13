@@ -61,7 +61,7 @@ fun PhoneInputScreen(onBack: () -> Unit, onContinue: (String) -> Unit) {
                 onClick = {
                     isLoading = true
                     errorMsg = null
-                    val fullPhone = "+53$phone"
+                    val fullPhone = "53$phone"
                     CoroutineScope(Dispatchers.IO).launch {
                         xmppClient.authenticate(fullPhone).onSuccess { jwt ->
                             jwtManager.saveJwt(jwt, fullPhone)
