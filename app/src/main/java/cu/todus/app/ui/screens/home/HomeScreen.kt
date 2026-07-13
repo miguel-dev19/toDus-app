@@ -2,6 +2,7 @@ package cu.todus.app.ui.screens.home
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -9,16 +10,23 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cu.todus.app.data.local.ToDusDatabase
 import cu.todus.app.data.remote.ConnectionState
 import cu.todus.app.ui.components.ChatListItem
 import cu.todus.app.ui.components.HomeTopBar
 import cu.todus.app.ui.theme.ToDusColors
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Composable
 fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit) {
+    val context = LocalContext.current
+    val db = remember { ToDusDatabase.getInstance(context) }
+    val chats by db.chatDao().getAllChats().collectAsStateWithLifecycle(emptyList())
     val connectionState = remember { mutableStateOf(ConnectionState.CONNECTED) }
-    val chats = remember { mutableStateListOf<Any>() }
 
     Scaffold(
         topBar = { HomeTopBar(connectionState.value, "Usuario") {} },
@@ -34,7 +42,16 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit) {
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 80.dp)) {
-                items(chats.size) { }
+                items(chats, key = { it.jid }) { chat ->
+                    val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(chat.lastTimestamp))
+                    ChatListItem(
+                        name = chat.name.ifEmpty { chat.jid },
+                        lastMessage = chat.lastMessage,
+                        time = timeStr,
+                        unreadCount = chat.unreadCount,
+                        onClick = { onChatClick(chat.jid, chat.name.ifEmpty { chat.jid }) }
+                    )
+                }
             }
         }
     }

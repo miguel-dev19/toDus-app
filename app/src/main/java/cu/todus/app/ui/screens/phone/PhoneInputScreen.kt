@@ -1,4 +1,5 @@
 package cu.todus.app.ui.screens.phone
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -13,16 +14,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import cu.todus.app.data.local.JwtManager
+import cu.todus.app.data.remote.XmppClient
 import cu.todus.app.ui.theme.ToDusColors
+import kotlinx.coroutines.*
 
 @Composable
 fun PhoneInputScreen(onBack: () -> Unit, onContinue: (String) -> Unit) {
     var phone by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
     val isValid = phone.length == 8 && phone.startsWith("5")
     val focusRequester = remember { FocusRequester() }
+    val context = LocalContext.current
+    val xmppClient = remember { XmppClient() }
+    val jwtManager = remember { JwtManager(context) }
+    
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -40,10 +51,43 @@ fun PhoneInputScreen(onBack: () -> Unit, onContinue: (String) -> Unit) {
                 Spacer(modifier = Modifier.width(12.dp))
                 OutlinedTextField(value = phone, onValueChange = { if (it.length <= 8) phone = it.filter { c -> c.isDigit() } }, modifier = Modifier.weight(1f).focusRequester(focusRequester), textStyle = MaterialTheme.typography.titleMedium, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
             }
+            if (errorMsg != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(errorMsg!!, color = ToDusColors.Error, style = MaterialTheme.typography.bodySmall)
+            }
         }
         Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(24.dp, 32.dp)) {
-            Button(onClick = { onContinue("+53$phone") }, modifier = Modifier.fillMaxWidth().height(52.dp), enabled = isValid, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = ToDusColors.Red)) {
-                Text("Continuar", style = MaterialTheme.typography.titleMedium)
+            Button(
+                onClick = {
+                    isLoading = true
+                    errorMsg = null
+                    val fullPhone = "+53$phone"
+                    CoroutineScope(Dispatchers.IO).launch {
+                        xmppClient.authenticate(fullPhone).onSuccess { jwt ->
+                            jwtManager.saveJwt(jwt, fullPhone)
+                            xmppClient.connect(fullPhone, jwt)
+                            withContext(Dispatchers.Main) {
+                                isLoading = false
+                                onContinue(fullPhone)
+                            }
+                        }.onFailure { e ->
+                            withContext(Dispatchers.Main) {
+                                isLoading = false
+                                errorMsg = "Error: ${e.message}"
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                enabled = isValid && !isLoading,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ToDusColors.Red)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = ToDusColors.White)
+                } else {
+                    Text("Continuar", style = MaterialTheme.typography.titleMedium)
+                }
             }
         }
     }
