@@ -11,7 +11,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.UUID
 
 class XmppClient {
-    private var connection: XMPPTCPConnection? = null
+    var connection: XMPPTCPConnection? = null
+        private set
     private var chatManager: ChatManager? = null
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState
@@ -47,11 +48,24 @@ class XmppClient {
             connection?.login(phone, jwt)
             _connectionState.value = ConnectionState.AUTHENTICATED
             chatManager = ChatManager.getInstanceFor(connection)
+            setupMessageListener()
             _connectionState.value = ConnectionState.CONNECTED
             Result.success(Unit)
         } catch (e: Exception) {
             _connectionState.value = ConnectionState.DISCONNECTED
             Result.failure(e)
+        }
+    }
+
+    private fun setupMessageListener() {
+        chatManager?.addIncomingListener { _, message, _ ->
+            val msg = ToDusMessage(
+                id = message.stanzaId ?: randomHexId(16),
+                from = message.from.asBareJid().toString().split("@")[0],
+                body = message.body ?: "",
+                timestamp = System.currentTimeMillis()
+            )
+            _incomingMessages.tryEmit(msg)
         }
     }
 
