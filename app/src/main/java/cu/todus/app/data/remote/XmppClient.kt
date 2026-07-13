@@ -15,7 +15,11 @@ class XmppClient {
     private var chatManager: ChatManager? = null
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState
+    private val _incomingMessages = MutableSharedFlow<ToDusMessage>()
+    val incomingMessages: SharedFlow<ToDusMessage> = _incomingMessages
     private val okHttpClient = OkHttpClient()
+
+    data class ToDusMessage(val id: String, val from: String, val body: String, val timestamp: Long, val xml: String = "")
 
     suspend fun authenticate(phone: String): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -55,20 +59,9 @@ class XmppClient {
         val msgId = randomHexId(16)
         val jid = JidCreate.entityBareFrom("$to@im.todus.cu")
         val msg = org.jivesoftware.smack.packet.Message(jid, org.jivesoftware.smack.packet.Message.Type.chat)
-        msg.stanzaId = msgId
-        msg.body = text
+        msg.stanzaId = msgId; msg.body = text
         chatManager?.chatWith(jid)?.send(msg)
         return msgId
-    }
-
-    suspend fun sendIqAndWait(xml: String): String = withContext(Dispatchers.IO) {
-        try {
-            val conn = connection ?: return@withContext ""
-            val parser = org.jivesoftware.smack.xml.XmlPullParserFactory.newInstance().newPullParser(xml.reader())
-            val iq = org.jivesoftware.smack.util.PacketParserUtils.parseIQ(parser)
-            val response = conn.sendIqRequestAndWaitForResponse(iq)
-            response?.toXML()?.toString() ?: ""
-        } catch (e: Exception) { "" }
     }
 
     fun disconnect() { connection?.disconnect(); _connectionState.value = ConnectionState.DISCONNECTED }

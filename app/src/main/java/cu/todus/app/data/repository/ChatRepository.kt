@@ -1,4 +1,5 @@
 package cu.todus.app.data.repository
+
 import cu.todus.app.data.local.dao.ChatDao
 import cu.todus.app.data.local.dao.MessageDao
 import cu.todus.app.data.local.entity.ChatEntity
@@ -19,11 +20,5 @@ class ChatRepository(
         messageDao.insert(MessageEntity(id = msgId, chatJid = to, senderPhone = "me", body = text, timestamp = System.currentTimeMillis()))
         chatDao.updateLastMessage(to, text, System.currentTimeMillis())
         return msgId
-    }
-
-    suspend fun saveIncomingMessage(msg: XmppClient.ToDusMessage) {
-        messageDao.insert(MessageEntity(id = msg.id, chatJid = msg.from, senderPhone = msg.from, body = msg.body, state = "received", timestamp = msg.timestamp))
-        chatDao.updateLastMessage(msg.from, msg.body, msg.timestamp)
-        chatDao.incrementUnread(msg.from)
     }
 }
