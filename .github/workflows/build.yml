@@ -23,7 +23,31 @@ jobs:
     - name: Build debug APK
       run: ./gradlew assembleDebug
       
-    - uses: actions/upload-artifact@v4
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
       with:
         name: toDus-debug
         path: app/build/outputs/apk/debug/app-debug.apk
+        
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: toDus v0.1
+        tag_name: v0.1
+        files: app/build/outputs/apk/debug/app-debug.apk
+        body: |
+          ## toDus v0.1
+          
+          ### Funciones:
+          - Autenticación JWT
+          - Conexión XMPP
+          - Envío/recepción de mensajes de texto
+          - Contactos
+          - Mensajes offline
+          - Room Database
+          - 6 pantallas UI
+          - Logo y colores oficiales
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
