@@ -11,5 +11,4 @@ object AppModule {
     fun chatDao() = database().chatDao()
     fun contactDao() = database().contactDao()
     fun xmppClient() = XmppClient()
-    fun s3Uploader(xmpp: XmppClient) = S3Uploader(xmpp)
 }
