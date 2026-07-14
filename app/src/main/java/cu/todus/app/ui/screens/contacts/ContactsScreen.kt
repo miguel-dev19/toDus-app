@@ -13,31 +13,65 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.PhoneContactSync
 import cu.todus.app.data.local.ToDusDatabase
+import cu.todus.app.data.local.entity.ContactEntity
+import cu.todus.app.data.remote.ProfileManager
 import cu.todus.app.ui.components.ContactListItem
 import kotlinx.coroutines.*
 
 @Composable
 fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit) {
     val context = LocalContext.current
+    val app = context.applicationContext as ToDusApp
     val db = remember { ToDusDatabase.getInstance(context) }
     val contacts by db.contactDao().getAllContacts().collectAsStateWithLifecycle(emptyList())
     var isSyncing by remember { mutableStateOf(true) }
     
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
+            // 1. Leer contactos del teléfono
             val phoneSync = PhoneContactSync(context, 53)
             val phoneContacts = phoneSync.getPhoneContacts()
+            
+            // 2. Guardar en BD temporalmente (sin isInRoster)
             phoneContacts.forEach { contact ->
-                db.contactDao().insert(contact)
+                db.contactDao().insert(contact.copy(isInRoster = false))
             }
+            
+            // 3. Verificar cuáles usan toDus (consultar al servidor)
+            app.xmppClient.connection?.let { conn ->
+                val profileManager = ProfileManager(conn)
+                phoneContacts.forEach { contact ->
+                    profileManager.getProfile(contact.phone).onSuccess { profile ->
+                        if (profile.exists) {
+                            // Actualizar con datos reales de toDus
+                            db.contactDao().insert(
+                                ContactEntity(
+                                    phone = contact.phone,
+                                    alias = profile.alias.ifEmpty { contact.alias },
+                                    toDusId = profile.toDusId,
+                                    avatarUrl = profile.photoThumbnail.ifEmpty { profile.photoUrl },
+                                    isInRoster = true  // ← Solo los que usan toDus
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+            
             isSyncing = false
         }
     }
     
-    val grouped = remember(contacts) {
-        contacts.sortedBy { it.alias.lowercase() }.groupBy { it.alias.first().uppercase() }
+    // Mostrar solo los que están en toDus
+    val toDusContacts = remember(contacts) {
+        contacts.filter { it.isInRoster }
+    }
+    
+    val grouped = remember(toDusContacts) {
+        toDusContacts.sortedBy { it.alias.lowercase() }.groupBy { it.alias.first().uppercase() }
     }
 
     Scaffold(
@@ -50,13 +84,17 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
             }
         }
     ) { padding ->
-        if (isSyncing && contacts.isEmpty()) {
+        if (isSyncing) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Buscando contactos en toDus...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
-        } else if (contacts.isEmpty()) {
+        } else if (toDusContacts.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("No tienes contactos", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                Text("No tienes contactos en toDus", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -70,6 +108,7 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
                         ContactListItem(
                             name = contact.alias.ifEmpty { contact.phone },
                             bio = contact.toDusId,
+                            avatarUrl = contact.avatarUrl.ifEmpty { null },
                             onClick = { onContactClick(contact.phone, contact.alias.ifEmpty { contact.phone }) }
                         )
                     }
