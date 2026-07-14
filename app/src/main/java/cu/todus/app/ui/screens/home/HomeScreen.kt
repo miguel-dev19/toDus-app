@@ -38,12 +38,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit) {
 
     Scaffold(
         topBar = { 
-            HomeTopBar(
-                connectionState = connectionState, 
-                userName = userName, 
-                userAvatar = userAvatar,
-                onProfileClick = {}
-            ) 
+            HomeTopBar(connectionState, userName, userAvatar) {} 
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onNewChat, containerColor = ToDusColors.Red, shape = CircleShape) {
@@ -70,6 +65,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit) {
                         lastMessage = chat.lastMessage,
                         time = timeStr,
                         unreadCount = chat.unreadCount,
+                        avatarUrl = chat.avatarUrl.ifEmpty { null },
                         onClick = { onChatClick(chat.jid, chat.name.ifEmpty { chat.jid }) }
                     )
                 }
