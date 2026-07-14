@@ -10,22 +10,24 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
 
 object ToDusXMPPFactoryConfiguration {
-    private const val HOST = "ws.todus.cu"
-    private const val PORT = 1756
-    private const val DOMAIN = "im.todus.cu"
+    const val HOST = "ws.todus.cu"
+    const val PORT = 1756
+    const val DOMAIN = "im.todus.cu"
 
     fun create(username: String): XMPPTCPConnection {
         val resource = username.md5() + "_Android"
         val config = XMPPTCPConnectionConfiguration.builder()
-            .setHost(HOST).setPort(PORT)
-            .setXmppDomain(JidCreate.from(DOMAIN).asDomainBareJid())
+            .setHost(HOST)
+            .setPort(PORT)
+            .setXmppDomain(DOMAIN)
             .setResource(resource)
-            .setSecurityMode(SecurityMode.disabled)
-            .setCompressionEnabled(true)
+            .setSecurityMode(SecurityMode.ifpossible)
+            .setCompressionEnabled(false)
             .setSendPresence(true)
             .setCustomSSLContext(createTrustAllSSLContext())
             .setHostnameVerifier { _, _ -> true }
             .setDebuggerFactory { ToDusXmppDebugger(it) }
+            .setConnectTimeout(30000)
             .build()
         return XMPPTCPConnection(config)
     }
