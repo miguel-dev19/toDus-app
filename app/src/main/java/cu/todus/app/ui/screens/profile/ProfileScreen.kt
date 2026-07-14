@@ -23,8 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.JwtManager
-import cu.todus.app.data.remote.XmppClient
 import cu.todus.app.ui.theme.ToDusColors
 import kotlinx.coroutines.*
 
@@ -42,15 +42,15 @@ fun ProfileScreen(
     var isUploading by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     val context = LocalContext.current
-    val xmppClient = remember { XmppClient() }
+    val app = context.applicationContext as ToDusApp
+    val jwtManager = remember { JwtManager(context) }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { selectedImageUri = it } }
 
     LaunchedEffect(phone, jwt) {
         if (phone.isNotEmpty() && jwt.isNotEmpty()) {
             try {
-                xmppClient.connect(phone, jwt)
-                // Intentar cargar perfil del servidor (si falla, se queda vacío)
+                app.xmppClient.connect(phone, jwt)
                 isLoading = false
             } catch (e: Exception) { isLoading = false }
         }
@@ -82,7 +82,8 @@ fun ProfileScreen(
             }
             Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(24.dp, 32.dp)) {
                 Button(onClick = {
-                    JwtManager(context).saveJwt(jwt, phone)
+                    jwtManager.saveJwt(jwt, phone)
+                    if (name.isNotBlank()) jwtManager.saveProfile(name, photoUrl ?: "", toDusId)
                     onContinue()
                 }, modifier = Modifier.fillMaxWidth().height(52.dp), enabled = name.isNotBlank(), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = ToDusColors.Red)) { Text("Continuar", style = MaterialTheme.typography.titleMedium) }
             }

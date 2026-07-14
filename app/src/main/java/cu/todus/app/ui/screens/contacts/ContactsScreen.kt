@@ -13,14 +13,29 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cu.todus.app.data.local.PhoneContactSync
 import cu.todus.app.data.local.ToDusDatabase
 import cu.todus.app.ui.components.ContactListItem
+import kotlinx.coroutines.*
 
 @Composable
 fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit) {
     val context = LocalContext.current
     val db = remember { ToDusDatabase.getInstance(context) }
     val contacts by db.contactDao().getAllContacts().collectAsStateWithLifecycle(emptyList())
+    var isSyncing by remember { mutableStateOf(true) }
+    
+    // Sincronizar contactos del teléfono
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val phoneSync = PhoneContactSync(context, 53)
+            val phoneContacts = phoneSync.getPhoneContacts()
+            phoneContacts.forEach { contact ->
+                db.contactDao().insert(contact)
+            }
+            isSyncing = false
+        }
+    }
     
     val grouped = remember(contacts) {
         contacts.sortedBy { it.alias.lowercase() }.groupBy { it.alias.first().uppercase() }
@@ -36,7 +51,11 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
             }
         }
     ) { padding ->
-        if (contacts.isEmpty()) {
+        if (isSyncing && contacts.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            }
+        } else if (contacts.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Text("No tienes contactos", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
             }
@@ -51,7 +70,7 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
                     items(contactsForLetter, key = { it.uid }) { contact ->
                         ContactListItem(
                             name = contact.alias.ifEmpty { contact.username },
-                            bio = contact.toDusId,
+                            bio = contact.description,
                             onClick = { onContactClick(contact.username, contact.alias.ifEmpty { contact.username }) }
                         )
                     }

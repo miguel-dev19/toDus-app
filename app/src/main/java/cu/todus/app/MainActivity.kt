@@ -6,6 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
 import cu.todus.app.data.local.JwtManager
+import cu.todus.app.data.local.ToDusDatabase
+import cu.todus.app.data.remote.OfflineManager
 import cu.todus.app.data.remote.XmppClient
 import cu.todus.app.ui.theme.ToDusTheme
 import cu.todus.app.ui.navigation.NavGraph
@@ -19,6 +21,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         jwtManager = JwtManager(this)
         val app = application as ToDusApp
+        val db = ToDusDatabase.getInstance(this)
         
         var startDestination = "welcome"
         
@@ -28,6 +31,11 @@ class MainActivity : ComponentActivity() {
             val jwt = jwtManager.getJwt() ?: ""
             CoroutineScope(Dispatchers.IO).launch {
                 app.xmppClient.connect(phone, jwt)
+                // Descargar mensajes offline al conectar
+                app.xmppClient.connection?.let { conn ->
+                    val offlineManager = OfflineManager(conn, db.messageDao(), db.chatDao())
+                    offlineManager.downloadOfflineMessages()
+                }
             }
         } else if (jwtManager.getPhone() != null && jwtManager.isJwtExpired()) {
             startDestination = "home"
@@ -35,9 +43,13 @@ class MainActivity : ComponentActivity() {
                 jwtManager.revalidateJwt().onSuccess { jwt ->
                     val phone = jwtManager.getPhone() ?: return@launch
                     app.xmppClient.connect(phone, jwt)
+                    app.xmppClient.connection?.let { conn ->
+                        val offlineManager = OfflineManager(conn, db.messageDao(), db.chatDao())
+                        offlineManager.downloadOfflineMessages()
+                    }
                 }.onFailure {
                     jwtManager.clear()
-                    runOnUiThread { setContent { ToDusTheme { NavGraph(startDestination = "welcome") } } }
+                    runOnUiThread { recreate() }
                 }
             }
         }

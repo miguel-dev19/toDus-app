@@ -31,7 +31,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit) {
     
     val chats by db.chatDao().getAllChats().collectAsStateWithLifecycle(emptyList())
     val connectionState by app.xmppClient.connectionState.collectAsState()
-    val userName = remember { jwtManager.getPhone() ?: "Usuario" }
+    val userName = remember { jwtManager.getAlias() ?: jwtManager.getPhone() ?: "Usuario" }
 
     Scaffold(
         topBar = { HomeTopBar(connectionState = connectionState, userName = userName, onProfileClick = {}) },
