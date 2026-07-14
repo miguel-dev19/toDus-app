@@ -4,7 +4,6 @@ import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.jivesoftware.smack.chat2.ChatManager
-import org.jivesoftware.smack.packet.IQ
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
 import org.jxmpp.jid.impl.JidCreate
 import okhttp3.*
@@ -80,16 +79,6 @@ class XmppClient {
         return msgId
     }
 
-    suspend fun sendIqAndWait(xml: String): String = withContext(Dispatchers.IO) {
-        try {
-            val conn = connection ?: return@withContext ""
-            val parser = org.jivesoftware.smack.xml.XmlPullParserFactory.newInstance().newPullParser(xml.reader())
-            val iq = org.jivesoftware.smack.util.PacketParserUtils.parseIQ(parser)
-            val response = conn.sendIqRequestAndWaitForResponse(iq)
-            response?.toXML()?.toString() ?: ""
-        } catch (e: Exception) { "" }
-    }
-
     fun disconnect() { connection?.disconnect(); _connectionState.value = ConnectionState.DISCONNECTED }
-    private fun randomHexId(len: Int = 16): String = (1..len).map { "abcdef0123456789".random() }.joinToString("")
+    fun randomHexId(len: Int = 16): String = (1..len).map { "abcdef0123456789".random() }.joinToString("")
 }

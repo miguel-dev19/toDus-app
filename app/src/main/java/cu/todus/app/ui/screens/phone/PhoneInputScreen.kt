@@ -17,8 +17,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cu.todus.app.data.local.JwtManager
 import cu.todus.app.data.remote.XmppClient
 import cu.todus.app.ui.theme.ToDusColors
@@ -47,7 +47,7 @@ fun PhoneInputScreen(onBack: () -> Unit, onContinue: (String, String) -> Unit) {
             Spacer(modifier = Modifier.height(32.dp))
             Row(modifier = Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(modifier = Modifier.width(100.dp).height(56.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("\uD83C\uDDE8\uD83C\uDDFA", fontSize = 18.sp, textAlign = TextAlign.Center)
+                    Text("\uD83C\uDDE8\uD83C\uDDFA", fontSize = 18.sp)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("+53", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 }

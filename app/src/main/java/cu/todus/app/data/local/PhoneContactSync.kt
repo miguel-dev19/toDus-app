@@ -44,11 +44,10 @@ class PhoneContactSync(
                         
                         if (seen.add(normalized)) {
                             contacts.add(ContactEntity(
-                                uid = normalized,
-                                username = normalized,
+                                phone = normalized,
                                 alias = name,
-                                photoUrl = photoUri,
-                                description = getPhoneTypeLabel(type),
+                                toDusId = "",
+                                avatarUrl = photoUri,
                                 isInRoster = false
                             ))
                         }
@@ -58,12 +57,5 @@ class PhoneContactSync(
         } catch (e: SecurityException) { }
         
         contacts
-    }
-    
-    private fun getPhoneTypeLabel(type: Int): String = when (type) {
-        ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE -> "Mobile"
-        ContactsContract.CommonDataKinds.Phone.TYPE_HOME -> "Home"
-        ContactsContract.CommonDataKinds.Phone.TYPE_WORK -> "Work"
-        else -> "Other"
     }
 }

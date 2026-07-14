@@ -25,7 +25,6 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
     val contacts by db.contactDao().getAllContacts().collectAsStateWithLifecycle(emptyList())
     var isSyncing by remember { mutableStateOf(true) }
     
-    // Sincronizar contactos del teléfono
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             val phoneSync = PhoneContactSync(context, 53)
@@ -67,11 +66,11 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
                             Text(letter, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                         }
                     }
-                    items(contactsForLetter, key = { it.uid }) { contact ->
+                    items(contactsForLetter, key = { it.phone }) { contact ->
                         ContactListItem(
-                            name = contact.alias.ifEmpty { contact.username },
-                            bio = contact.description,
-                            onClick = { onContactClick(contact.username, contact.alias.ifEmpty { contact.username }) }
+                            name = contact.alias.ifEmpty { contact.phone },
+                            bio = contact.toDusId,
+                            onClick = { onContactClick(contact.phone, contact.alias.ifEmpty { contact.phone }) }
                         )
                     }
                 }
