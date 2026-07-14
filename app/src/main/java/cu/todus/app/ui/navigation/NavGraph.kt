@@ -17,7 +17,9 @@ import cu.todus.app.ui.screens.chat.ChatScreen
 sealed class Screen(val route: String) {
     object Welcome : Screen("welcome")
     object PhoneInput : Screen("phone_input")
-    object Profile : Screen("profile")
+    object Profile : Screen("profile/{phone}/{jwt}") {
+        fun createRoute(phone: String, jwt: String) = "profile/$phone/$jwt"
+    }
     object Home : Screen("home")
     object Contacts : Screen("contacts")
     object Chat : Screen("chat/{jid}/{name}") {
@@ -26,45 +28,35 @@ sealed class Screen(val route: String) {
 }
 
 @Composable
-fun NavGraph(
-    navController: NavHostController = rememberNavController(),
-    startDestination: String = Screen.Welcome.route
-) {
+fun NavGraph(navController: NavHostController = rememberNavController(), startDestination: String = Screen.Welcome.route) {
     NavHost(navController = navController, startDestination = startDestination) {
-        composable(Screen.Welcome.route) {
-            WelcomeScreen(onContinue = { navController.navigate(Screen.PhoneInput.route) })
-        }
+        composable(Screen.Welcome.route) { WelcomeScreen(onContinue = { navController.navigate(Screen.PhoneInput.route) }) }
+        
         composable(Screen.PhoneInput.route) {
             PhoneInputScreen(
                 onBack = { navController.popBackStack() },
-                onContinue = { phone -> navController.navigate(Screen.Profile.route) }
+                onContinue = { phone, jwt -> navController.navigate(Screen.Profile.createRoute(phone, jwt)) }
             )
         }
-        composable(Screen.Profile.route) {
-            ProfileScreen(
-                onBack = { navController.popBackStack() },
-                onContinue = { navController.navigate(Screen.Home.route) { popUpTo(0) } }
-            )
-        }
-        composable(Screen.Home.route) {
-            HomeScreen(
-                onChatClick = { jid, name -> navController.navigate(Screen.Chat.createRoute(jid, name)) },
-                onNewChat = { navController.navigate(Screen.Contacts.route) }
-            )
-        }
-        composable(Screen.Contacts.route) {
-            ContactsScreen(
-                onBack = { navController.popBackStack() },
-                onContactClick = { jid, name -> navController.navigate(Screen.Chat.createRoute(jid, name)) }
-            )
-        }
+        
         composable(
-            route = Screen.Chat.route,
-            arguments = listOf(
-                navArgument("jid") { type = NavType.StringType },
-                navArgument("name") { type = NavType.StringType }
-            )
+            route = Screen.Profile.route,
+            arguments = listOf(navArgument("phone") { type = NavType.StringType }, navArgument("jwt") { type = NavType.StringType })
         ) { backStackEntry ->
+            val phone = backStackEntry.arguments?.getString("phone") ?: ""
+            val jwt = backStackEntry.arguments?.getString("jwt") ?: ""
+            ProfileScreen(phone = phone, jwt = jwt, onBack = { navController.popBackStack() }, onContinue = { navController.navigate(Screen.Home.route) { popUpTo(0) } })
+        }
+        
+        composable(Screen.Home.route) {
+            HomeScreen(onChatClick = { jid, name -> navController.navigate(Screen.Chat.createRoute(jid, name)) }, onNewChat = { navController.navigate(Screen.Contacts.route) })
+        }
+        
+        composable(Screen.Contacts.route) {
+            ContactsScreen(onBack = { navController.popBackStack() }, onContactClick = { jid, name -> navController.navigate(Screen.Chat.createRoute(jid, name)) })
+        }
+        
+        composable(route = Screen.Chat.route, arguments = listOf(navArgument("jid") { type = NavType.StringType }, navArgument("name") { type = NavType.StringType })) { backStackEntry ->
             val jid = backStackEntry.arguments?.getString("jid") ?: ""
             val name = backStackEntry.arguments?.getString("name") ?: ""
             ChatScreen(chatJid = jid, chatName = name, onBack = { navController.popBackStack() })

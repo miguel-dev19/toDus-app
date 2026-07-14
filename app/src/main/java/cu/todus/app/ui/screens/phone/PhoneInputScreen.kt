@@ -17,6 +17,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cu.todus.app.data.local.JwtManager
 import cu.todus.app.data.remote.XmppClient
@@ -24,7 +25,7 @@ import cu.todus.app.ui.theme.ToDusColors
 import kotlinx.coroutines.*
 
 @Composable
-fun PhoneInputScreen(onBack: () -> Unit, onContinue: (String) -> Unit) {
+fun PhoneInputScreen(onBack: () -> Unit, onContinue: (String, String) -> Unit) {
     var phone by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
@@ -38,56 +39,49 @@ fun PhoneInputScreen(onBack: () -> Unit, onContinue: (String) -> Unit) {
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver") }
+            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = MaterialTheme.colorScheme.onBackground) }
             Spacer(modifier = Modifier.height(32.dp))
-            Text("Ingresar numero", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("Ingresar numero", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
             Spacer(modifier = Modifier.height(8.dp))
             Text("Por favor, ingresa tu numero de telefono para continuar", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
             Spacer(modifier = Modifier.height(32.dp))
             Row(modifier = Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(modifier = Modifier.width(100.dp).height(56.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("+53", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("\uD83C\uDDE8\uD83C\uDDFA", fontSize = 18.sp, textAlign = TextAlign.Center)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("+53", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-                OutlinedTextField(value = phone, onValueChange = { if (it.length <= 8) phone = it.filter { c -> c.isDigit() } }, modifier = Modifier.weight(1f).focusRequester(focusRequester), textStyle = MaterialTheme.typography.titleMedium, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
+                OutlinedTextField(
+                    value = phone, onValueChange = { if (it.length <= 8) phone = it.filter { c -> c.isDigit() } },
+                    modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                    textStyle = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.onBackground),
+                    singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                )
             }
-            if (errorMsg != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(errorMsg!!, color = ToDusColors.Error, style = MaterialTheme.typography.bodySmall)
-            }
+            if (errorMsg != null) { Spacer(modifier = Modifier.height(8.dp)); Text(errorMsg!!, color = ToDusColors.Error, style = MaterialTheme.typography.bodySmall) }
         }
         Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(24.dp, 32.dp)) {
             Button(
                 onClick = {
-                    isLoading = true
-                    errorMsg = null
+                    isLoading = true; errorMsg = null
                     val fullPhone = "53$phone"
                     CoroutineScope(Dispatchers.IO).launch {
                         xmppClient.authenticate(fullPhone).onSuccess { jwt ->
                             jwtManager.saveJwt(jwt, fullPhone)
-                            xmppClient.connect(fullPhone, jwt)
-                            withContext(Dispatchers.Main) {
-                                isLoading = false
-                                onContinue(fullPhone)
-                            }
+                            withContext(Dispatchers.Main) { isLoading = false; onContinue(fullPhone, jwt) }
                         }.onFailure { e ->
-                            withContext(Dispatchers.Main) {
-                                isLoading = false
-                                errorMsg = "Error: ${e.message}"
-                            }
+                            withContext(Dispatchers.Main) { isLoading = false; errorMsg = "Error: ${e.message}" }
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                enabled = isValid && !isLoading,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ToDusColors.Red)
+                modifier = Modifier.fillMaxWidth().height(52.dp), enabled = isValid && !isLoading,
+                shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = ToDusColors.Red)
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = ToDusColors.White)
-                } else {
-                    Text("Continuar", style = MaterialTheme.typography.titleMedium)
-                }
+                if (isLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = ToDusColors.White)
+                else Text("Continuar", style = MaterialTheme.typography.titleMedium)
             }
         }
     }
