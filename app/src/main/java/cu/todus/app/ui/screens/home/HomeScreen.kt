@@ -13,8 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cu.todus.app.ToDusApp
+import cu.todus.app.data.local.JwtManager
 import cu.todus.app.data.local.ToDusDatabase
-import cu.todus.app.data.remote.ConnectionState
 import cu.todus.app.ui.components.ChatListItem
 import cu.todus.app.ui.components.HomeTopBar
 import cu.todus.app.ui.theme.ToDusColors
@@ -24,12 +25,16 @@ import java.util.*
 @Composable
 fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit) {
     val context = LocalContext.current
+    val app = context.applicationContext as ToDusApp
     val db = remember { ToDusDatabase.getInstance(context) }
+    val jwtManager = remember { JwtManager(context) }
+    
     val chats by db.chatDao().getAllChats().collectAsStateWithLifecycle(emptyList())
-    val connectionState = remember { mutableStateOf(ConnectionState.CONNECTED) }
+    val connectionState by app.xmppClient.connectionState.collectAsState()
+    val userName = remember { jwtManager.getPhone() ?: "Usuario" }
 
     Scaffold(
-        topBar = { HomeTopBar(connectionState.value, "Usuario") {} },
+        topBar = { HomeTopBar(connectionState = connectionState, userName = userName, onProfileClick = {}) },
         floatingActionButton = {
             FloatingActionButton(onClick = onNewChat, containerColor = ToDusColors.Red, shape = CircleShape) {
                 Icon(Icons.Default.Add, "Nuevo Chat", tint = ToDusColors.White)

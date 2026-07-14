@@ -30,8 +30,8 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
         topBar = {
             Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
                 Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(start = 4.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver") }
-                    Text("Contactos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = MaterialTheme.colorScheme.onSurface) }
+                    Text("Contactos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 }
             }
         }
@@ -48,11 +48,11 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
                             Text(letter, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                         }
                     }
-                    items(contactsForLetter, key = { it.phone }) { contact ->
+                    items(contactsForLetter, key = { it.uid }) { contact ->
                         ContactListItem(
-                            name = contact.alias.ifEmpty { contact.phone },
+                            name = contact.alias.ifEmpty { contact.username },
                             bio = contact.toDusId,
-                            onClick = { onContactClick(contact.phone, contact.alias.ifEmpty { contact.phone }) }
+                            onClick = { onContactClick(contact.username, contact.alias.ifEmpty { contact.username }) }
                         )
                     }
                 }
