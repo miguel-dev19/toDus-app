@@ -36,26 +36,18 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        name: toDus v0.1
-        tag_name: v0.1
+        name: toDus v0.2
+        tag_name: v0.2
         files: app/build/outputs/apk/debug/app-debug.apk
         body: |
-          ## toDus v0.1 - Primer Release
+          ## v0.2
           
-          ### Funciones incluidas:
-          - Autenticacion JWT con numero de telefono
-          - Conexion XMPP (ws.todus.cu:5222)
-          - Envio y recepcion de mensajes de texto
-          - Lista de chats (HomeScreen)
-          - Lista de contactos (ContactsScreen)
-          - Chat individual con burbujas rojo/blanco
-          - Estados de mensaje (enviado/entregado/leido)
-          - Mensajes offline
-          - Persistencia de sesion (JWT automatico)
-          - Room Database local
-          - 6 pantallas (Welcome, Phone, Profile, Home, Contacts, Chat)
-          - Logo oficial de toDus
-          - Colores oficiales
+          - Puerto de conexion corregido
+          - Tema oscuro
+          - Indicador de conexion en avatar
+          - Mensajes offline al iniciar
+          - Sincronizacion de contactos del dispositivo
+          - Persistencia de sesion y perfil
         draft: false
         prerelease: false
       env:
