@@ -34,9 +34,17 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit) {
     val chats by db.chatDao().getAllChats().collectAsStateWithLifecycle(emptyList())
     val connectionState by app.xmppClient.connectionState.collectAsState()
     val userName = remember { jwtManager.getAlias() ?: jwtManager.getPhone() ?: "Usuario" }
+    val userAvatar = remember { jwtManager.getAvatar() }
 
     Scaffold(
-        topBar = { HomeTopBar(connectionState = connectionState, userName = userName, onProfileClick = {}) },
+        topBar = { 
+            HomeTopBar(
+                connectionState = connectionState, 
+                userName = userName, 
+                userAvatar = userAvatar,
+                onProfileClick = {}
+            ) 
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = onNewChat, containerColor = ToDusColors.Red, shape = CircleShape) {
                 Icon(Icons.Default.Add, "Nuevo Chat", tint = ToDusColors.White)

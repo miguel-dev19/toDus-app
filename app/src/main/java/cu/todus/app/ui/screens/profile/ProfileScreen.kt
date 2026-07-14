@@ -1,6 +1,7 @@
 package cu.todus.app.ui.screens.profile
 
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -42,32 +43,31 @@ fun ProfileScreen(
     val app = context.applicationContext as ToDusApp
     val jwtManager = remember { JwtManager(context) }
 
-    // Cargar perfil al entrar
     LaunchedEffect(phone, jwt) {
         if (phone.isNotEmpty() && jwt.isNotEmpty()) {
             try {
-                // Conectar usando el XmppClient compartido
-                app.xmppClient.connect(phone, jwt)
-                
-                // Intentar cargar datos del servidor
                 app.xmppClient.connection?.let { conn ->
                     val profileManager = cu.todus.app.data.remote.ProfileManager(conn)
                     profileManager.getProfile(phone).onSuccess { profile ->
                         name = profile.alias.ifEmpty { phone }
                         toDusId = profile.toDusId
                         if (profile.photoUrl.isNotEmpty()) photoUrl = profile.photoUrl
-                        // Guardar en prefs
+                        // Guardar alias y foto
                         jwtManager.saveProfile(name, profile.photoUrl, profile.toDusId)
                     }.onFailure {
-                        // Si falla, usar datos guardados
                         name = jwtManager.getAlias() ?: phone
                         toDusId = jwtManager.getToDusId() ?: ""
+                        photoUrl = jwtManager.getAvatar()
                     }
+                } ?: run {
+                    name = jwtManager.getAlias() ?: phone
+                    photoUrl = jwtManager.getAvatar()
                 }
                 isLoading = false
             } catch (e: Exception) {
                 isLoading = false
-                errorMsg = "No se pudo cargar el perfil"
+                name = jwtManager.getAlias() ?: phone
+                photoUrl = jwtManager.getAvatar()
             }
         }
     }
