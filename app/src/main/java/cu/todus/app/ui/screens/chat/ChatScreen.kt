@@ -36,6 +36,7 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit) {
     
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val messageText by viewModel.messageText.collectAsStateWithLifecycle()
+    val isLoadingOffline by viewModel.isLoadingOffline.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
@@ -65,8 +66,7 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit) {
                             value = messageText, onValueChange = { viewModel.onMessageTextChanged(it) },
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                             placeholder = { Text("Mensaje", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                            maxLines = 5,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface), maxLines = 5,
                             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent, focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent)
                         )
                     }
@@ -78,14 +78,31 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit) {
             }
         }
     ) { padding ->
-        if (messages.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Inicia una conversacion", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Indicador de carga de mensajes offline
+            if (isLoadingOffline) {
+                Surface(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Cargando mensajes...", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
             }
-        } else {
-            LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(vertical = 8.dp)) {
-                items(messages, key = { it.id }) { msg ->
-                    MessageBubble(text = msg.body, time = msg.timestamp, isMine = msg.senderPhone == "me", state = msg.state)
+            
+            if (messages.isEmpty() && !isLoadingOffline) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Inicia una conversacion", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Los mensajes estan cifrados de extremo a extremo", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    }
+                }
+            } else {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+                    items(messages, key = { it.id }) { msg ->
+                        MessageBubble(text = msg.body, time = msg.timestamp, isMine = msg.senderPhone == "me", state = msg.state)
+                    }
                 }
             }
         }

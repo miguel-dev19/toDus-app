@@ -1,6 +1,7 @@
 package cu.todus.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,31 +14,42 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cu.todus.app.data.remote.ConnectionState
+import cu.todus.app.ui.theme.ToDusColors
 
 @Composable
 fun HomeTopBar(
     connectionState: ConnectionState,
     userName: String,
+    userAvatar: String? = null,
     onProfileClick: () -> Unit
 ) {
+    val indicatorColor = when (connectionState) {
+        ConnectionState.CONNECTED, ConnectionState.AUTHENTICATED -> ToDusColors.Green
+        ConnectionState.CONNECTING, ConnectionState.RECONNECTING, ConnectionState.BEFORE_CONNECTED -> ToDusColors.Orange
+        ConnectionState.WAITING_FOR_CONNECTION -> ToDusColors.Gray
+        ConnectionState.DISCONNECTED -> ToDusColors.Error
+    }
+    
+    val statusText = when (connectionState) {
+        ConnectionState.CONNECTED, ConnectionState.AUTHENTICATED -> "Conectado"
+        ConnectionState.CONNECTING -> "Conectando..."
+        ConnectionState.RECONNECTING -> "Reconectando..."
+        ConnectionState.BEFORE_CONNECTED -> "Verificando..."
+        ConnectionState.WAITING_FOR_CONNECTION -> "Esperando red..."
+        ConnectionState.DISCONNECTED -> "Sin conexion"
+    }
+    
     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(start = 16.dp, end = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                when (connectionState) {
-                    ConnectionState.CONNECTED, ConnectionState.AUTHENTICATED -> "toDus"
-                    ConnectionState.CONNECTING -> "Conectando..."
-                    ConnectionState.RECONNECTING -> "Reconectando..."
-                    ConnectionState.WAITING_FOR_CONNECTION -> "Esperando red..."
-                    else -> "Sin conexion"
-                },
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text("toDus", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(statusText, style = MaterialTheme.typography.labelSmall, color = indicatorColor)
+            }
+            
             Surface(
                 onClick = onProfileClick,
                 shape = RoundedCornerShape(24.dp),
@@ -49,8 +61,11 @@ fun HomeTopBar(
                 ) {
                     Text(userName, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 100.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                        Text(userName.first().uppercase(), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                    Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.BottomEnd) {
+                        Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                            Text(userName.first().uppercase(), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                        }
+                        Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(indicatorColor).border(2.dp, MaterialTheme.colorScheme.surface, CircleShape))
                     }
                 }
             }

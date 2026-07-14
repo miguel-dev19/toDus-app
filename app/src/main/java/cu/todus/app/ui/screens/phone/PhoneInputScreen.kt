@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +31,7 @@ fun PhoneInputScreen(onBack: () -> Unit, onContinue: (String, String) -> Unit) {
     var phone by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
+    var step by remember { mutableStateOf(0) } // 0=esperando, 1=autenticando, 2=conectando
     val isValid = phone.length == 8 && phone.startsWith("5")
     val focusRequester = remember { FocusRequester() }
     val context = LocalContext.current
@@ -58,22 +61,65 @@ fun PhoneInputScreen(onBack: () -> Unit, onContinue: (String, String) -> Unit) {
                     textStyle = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.onBackground),
                     singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    leadingIcon = { Icon(Icons.Default.Phone, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    isError = errorMsg != null,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = if (errorMsg != null) ToDusColors.Error else MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                 )
             }
-            if (errorMsg != null) { Spacer(modifier = Modifier.height(8.dp)); Text(errorMsg!!, color = ToDusColors.Error, style = MaterialTheme.typography.bodySmall) }
+            
+            // Mensajes de validación
+            if (phone.isNotEmpty() && !isValid) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.ErrorOutline, null, tint = ToDusColors.Error, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        if (phone.length < 8) "El numero debe tener 8 digitos" else "El numero debe comenzar con 5",
+                        style = MaterialTheme.typography.bodySmall, color = ToDusColors.Error
+                    )
+                }
+            }
+            
+            if (errorMsg != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(color = ToDusColors.Error.copy(alpha = 0.1f), shape = RoundedCornerShape(8.dp)) {
+                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.ErrorOutline, null, tint = ToDusColors.Error, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(errorMsg!!, style = MaterialTheme.typography.bodySmall, color = ToDusColors.Error)
+                    }
+                }
+            }
+            
+            // Indicador de progreso
+            if (isLoading) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = ToDusColors.Red, strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        when (step) {
+                            1 -> "Verificando numero..."
+                            2 -> "Conectando al servidor..."
+                            else -> "Procesando..."
+                        },
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
         Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(24.dp, 32.dp)) {
             Button(
                 onClick = {
-                    isLoading = true; errorMsg = null
+                    isLoading = true; errorMsg = null; step = 1
                     val fullPhone = "53$phone"
                     CoroutineScope(Dispatchers.IO).launch {
                         xmppClient.authenticate(fullPhone).onSuccess { jwt ->
                             jwtManager.saveJwt(jwt, fullPhone)
+                            step = 2
                             withContext(Dispatchers.Main) { isLoading = false; onContinue(fullPhone, jwt) }
                         }.onFailure { e ->
-                            withContext(Dispatchers.Main) { isLoading = false; errorMsg = "Error: ${e.message}" }
+                            withContext(Dispatchers.Main) { isLoading = false; errorMsg = "No se pudo verificar el numero. Comprueba tu conexion." }
                         }
                     }
                 },
