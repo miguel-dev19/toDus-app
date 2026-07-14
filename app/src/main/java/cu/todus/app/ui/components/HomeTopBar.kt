@@ -54,7 +54,7 @@ fun HomeTopBar(
                         Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
                             Text(userName.first().uppercase(), fontSize = 16.sp, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
                         }
-                        Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(indicatorColor).border(2.dp, MaterialTheme.colorScheme.surface, CircleShape))
+                        Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(indicatorColor))
                     }
                 }
             }
