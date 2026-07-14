@@ -11,7 +11,7 @@ import javax.net.ssl.X509TrustManager
 
 object ToDusXMPPFactoryConfiguration {
     private const val HOST = "ws.todus.cu"
-    private const val PORT = 5222
+    private const val PORT = 1756
     private const val DOMAIN = "im.todus.cu"
 
     fun create(username: String): XMPPTCPConnection {
