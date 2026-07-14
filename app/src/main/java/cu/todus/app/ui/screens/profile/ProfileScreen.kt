@@ -1,6 +1,5 @@
 package cu.todus.app.ui.screens.profile
 
-import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,7 +25,6 @@ import coil.compose.AsyncImage
 import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.JwtManager
 import cu.todus.app.ui.theme.ToDusColors
-import kotlinx.coroutines.*
 
 @Composable
 fun ProfileScreen(
@@ -38,27 +36,51 @@ fun ProfileScreen(
     var name by remember { mutableStateOf("") }
     var toDusId by remember { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf<String?>(null) }
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-    var isUploading by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val app = context.applicationContext as ToDusApp
     val jwtManager = remember { JwtManager(context) }
 
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { selectedImageUri = it } }
-
+    // Cargar perfil al entrar
     LaunchedEffect(phone, jwt) {
         if (phone.isNotEmpty() && jwt.isNotEmpty()) {
             try {
+                // Conectar usando el XmppClient compartido
                 app.xmppClient.connect(phone, jwt)
+                
+                // Intentar cargar datos del servidor
+                app.xmppClient.connection?.let { conn ->
+                    val profileManager = cu.todus.app.data.remote.ProfileManager(conn)
+                    profileManager.getProfile(phone).onSuccess { profile ->
+                        name = profile.alias.ifEmpty { phone }
+                        toDusId = profile.toDusId
+                        if (profile.photoUrl.isNotEmpty()) photoUrl = profile.photoUrl
+                        // Guardar en prefs
+                        jwtManager.saveProfile(name, profile.photoUrl, profile.toDusId)
+                    }.onFailure {
+                        // Si falla, usar datos guardados
+                        name = jwtManager.getAlias() ?: phone
+                        toDusId = jwtManager.getToDusId() ?: ""
+                    }
+                }
                 isLoading = false
-            } catch (e: Exception) { isLoading = false }
+            } catch (e: Exception) {
+                isLoading = false
+                errorMsg = "No se pudo cargar el perfil"
+            }
         }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = ToDusColors.Red) }
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = ToDusColors.Red)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Cargando perfil...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         } else {
             Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(onClick = onBack, modifier = Modifier.size(40.dp).align(Alignment.Start)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = MaterialTheme.colorScheme.onBackground) }
@@ -67,18 +89,17 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(40.dp))
                 Box(modifier = Modifier.size(120.dp), contentAlignment = Alignment.Center) {
                     Surface(modifier = Modifier.fillMaxSize().clip(CircleShape), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
-                        val imageToShow = selectedImageUri ?: photoUrl?.let { Uri.parse(it) }
-                        if (imageToShow != null) {
-                            AsyncImage(model = imageToShow, contentDescription = "Foto", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        if (photoUrl != null) {
+                            AsyncImage(model = photoUrl, contentDescription = "Foto", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                         } else {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(Icons.Default.Person, null, modifier = Modifier.size(60.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) }
                         }
                     }
-                    FloatingActionButton(onClick = { imagePicker.launch("image/*") }, modifier = Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp).size(36.dp), containerColor = ToDusColors.Red, shape = CircleShape) { Icon(Icons.Default.CameraAlt, "Cambiar foto", modifier = Modifier.size(18.dp), tint = ToDusColors.White) }
                 }
                 Spacer(modifier = Modifier.height(32.dp))
-                OutlinedTextField(value = name, onValueChange = { name = it.take(50) }, modifier = Modifier.fillMaxWidth(), label = { Text("Tu nombre") }, placeholder = { Text("Como te llamas?") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Person, null) }, shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
+                OutlinedTextField(value = name, onValueChange = { name = it.take(50) }, modifier = Modifier.fillMaxWidth(), label = { Text("Tu nombre") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Person, null) }, shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
                 if (toDusId.isNotEmpty()) { Spacer(modifier = Modifier.height(8.dp)); Text("@$toDusId", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary) }
+                if (errorMsg != null) { Spacer(modifier = Modifier.height(8.dp)); Text(errorMsg!!, color = ToDusColors.Error, style = MaterialTheme.typography.bodySmall) }
             }
             Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(24.dp, 32.dp)) {
                 Button(onClick = {
