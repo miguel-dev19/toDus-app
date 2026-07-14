@@ -13,6 +13,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cu.todus.app.data.remote.ConnectionState
 import cu.todus.app.ui.theme.ToDusColors
 
@@ -30,25 +31,13 @@ fun HomeTopBar(
         ConnectionState.DISCONNECTED -> ToDusColors.Error
     }
     
-    val statusText = when (connectionState) {
-        ConnectionState.CONNECTED, ConnectionState.AUTHENTICATED -> "Conectado"
-        ConnectionState.CONNECTING -> "Conectando..."
-        ConnectionState.RECONNECTING -> "Reconectando..."
-        ConnectionState.BEFORE_CONNECTED -> "Verificando..."
-        ConnectionState.WAITING_FOR_CONNECTION -> "Esperando red..."
-        ConnectionState.DISCONNECTED -> "Sin conexion"
-    }
-    
     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(start = 16.dp, end = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("toDus", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text(statusText, style = MaterialTheme.typography.labelSmall, color = indicatorColor)
-            }
+            Text("toDus", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             
             Surface(
                 onClick = onProfileClick,
@@ -59,11 +48,11 @@ fun HomeTopBar(
                     modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(userName, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 100.dp))
+                    Text(userName, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 100.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.BottomEnd) {
                         Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                            Text(userName.first().uppercase(), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
+                            Text(userName.first().uppercase(), fontSize = 16.sp, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
                         }
                         Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(indicatorColor).border(2.dp, MaterialTheme.colorScheme.surface, CircleShape))
                     }
