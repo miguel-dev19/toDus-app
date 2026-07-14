@@ -28,31 +28,46 @@ jobs:
       run: ./gradlew assembleDebug
       
     - name: Rename APK
-      run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/toDus_v0.2.1.apk
+      run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/toDus_v0.3.apk
       
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
-        name: toDus_v0.2.1
-        path: app/build/outputs/apk/debug/toDus_v0.2.1.apk
+        name: toDus_v0.3
+        path: app/build/outputs/apk/debug/toDus_v0.3.apk
         
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        name: toDus v0.2.1
-        tag_name: v0.2.1
-        files: app/build/outputs/apk/debug/toDus_v0.2.1.apk
+        name: toDus v0.3
+        tag_name: v0.3
+        files: app/build/outputs/apk/debug/toDus_v0.3.apk
         body: |
-          ## v0.2.1
+          ## v0.3
           
-          - Puerto de conexion corregido
+          ### Arreglado
+          - Conexion XMPP corregida (punto verde ya funciona)
+          - Puerto oficial 1756
+          - Icono oficial de toDus
+          
+          ### Nuevo
+          - Tema oscuro en todas las pantallas
+          - Indicador de conexion en avatar (verde/conectado, rojo/desconectado)
           - Perfil carga datos reales del servidor
-          - Punto indicador de conexion en avatar
-          - Tema oscuro
           - Mensajes offline al iniciar
-          - Sincronizacion de contactos
-          - Validaciones en pantallas
-          - Persistencia de sesion y perfil
+          - Sincronizacion de contactos del telefono
+          
+          ### Mejoras
+          - Validaciones al ingresar numero
+          - Mensajes de carga y error
+          - Persistencia de sesion (no pide el numero cada vez)
+          - Interfaz mas limpia y rapida
+          
+          ### Cambios desde v0.2
+          - Puerto XMPP: 5222 → 1756
+          - SecurityMode: disabled → ifpossible
+          - Logo: vector → PNG oficial
+          - HomeTopBar: solo "toDus" + punto indicador
         draft: false
         prerelease: false
       env:
