@@ -23,6 +23,8 @@ class XmppClient {
 
     data class ToDusMessage(val id: String, val from: String, val body: String, val timestamp: Long, val xml: String = "")
 
+    fun randomHexId(len: Int = 16): String = (1..len).map { "abcdef0123456789".random() }.joinToString("")
+
     suspend fun authenticate(phone: String): Result<String> = withContext(Dispatchers.IO) {
         try {
             val uuid = UUID.randomUUID().toString().replace("-", "")
@@ -80,5 +82,4 @@ class XmppClient {
     }
 
     fun disconnect() { connection?.disconnect(); _connectionState.value = ConnectionState.DISCONNECTED }
-    fun randomHexId(len: Int = 16): String = (1..len).map { "abcdef0123456789".random() }.joinToString("")
 }
