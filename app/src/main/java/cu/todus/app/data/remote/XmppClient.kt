@@ -20,6 +20,8 @@ class XmppClient {
     private val _incomingMessages = MutableSharedFlow<ToDusMessage>()
     val incomingMessages: SharedFlow<ToDusMessage> = _incomingMessages
     private val okHttpClient = OkHttpClient()
+    private var pingJob: Job? = null
+    private var reconnectJob: Job? = null
 
     data class ToDusMessage(val id: String, val from: String, val body: String, val timestamp: Long, val xml: String = "")
 
@@ -52,11 +54,43 @@ class XmppClient {
             _connectionState.value = ConnectionState.AUTHENTICATED
             chatManager = ChatManager.getInstanceFor(connection)
             setupMessageListener()
+            startPingKeepAlive()
+            startReconnectWatcher(phone, jwt)
             _connectionState.value = ConnectionState.CONNECTED
             Result.success(Unit)
         } catch (e: Exception) {
             _connectionState.value = ConnectionState.DISCONNECTED
             Result.failure(e)
+        }
+    }
+
+    private fun startPingKeepAlive() {
+        pingJob?.cancel()
+        pingJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isActive) {
+                delay(30000)
+                try {
+                    connection?.sendStanza(org.jivesoftware.smack.packet.StanzaBuilder.buildStanza("<iq type=\"get\" id=\"${randomHexId(8)}\"><ping xmlns=\"urn:xmpp:ping\"/></iq>"))
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    private fun startReconnectWatcher(phone: String, jwt: String) {
+        reconnectJob?.cancel()
+        reconnectJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isActive) {
+                delay(5000)
+                if (connection?.isConnected == false && _connectionState.value == ConnectionState.CONNECTED) {
+                    _connectionState.value = ConnectionState.RECONNECTING
+                    try {
+                        connection?.disconnect()
+                        connect(phone, jwt)
+                    } catch (_: Exception) {
+                        _connectionState.value = ConnectionState.DISCONNECTED
+                    }
+                }
+            }
         }
     }
 
@@ -81,5 +115,10 @@ class XmppClient {
         return msgId
     }
 
-    fun disconnect() { connection?.disconnect(); _connectionState.value = ConnectionState.DISCONNECTED }
+    fun disconnect() {
+        pingJob?.cancel()
+        reconnectJob?.cancel()
+        connection?.disconnect()
+        _connectionState.value = ConnectionState.DISCONNECTED
+    }
 }
