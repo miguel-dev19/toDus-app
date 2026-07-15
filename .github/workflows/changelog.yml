@@ -22,36 +22,33 @@ jobs:
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           
           if [ -n "$LAST_TAG" ]; then
-            COMMITS=$(git log ${LAST_TAG}..HEAD --oneline)
+            COMMITS=$(git log ${LAST_TAG}..HEAD --format="%s")
           else
-            COMMITS=$(git log --oneline)
+            COMMITS=$(git log --format="%s")
           fi
           
           # Archivos temporales por categoría
           > /tmp/nuevo.txt
           > /tmp/correccion.txt
           > /tmp/mejora.txt
-          > /tmp/eliminado.txt
           > /tmp/otro.txt
           
           echo "$COMMITS" | while read -r line; do
-            MSG=$(echo "$line" | cut -d' ' -f2-)
+            # Quitar prefijos comunes
+            MSG=$(echo "$line" | sed 's/^Fix: //;s/^fix: //;s/^Add: //;s/^add: //;s/^Update: //;s/^update: //;s/^Remove: //;s/^remove: //')
             
-            case "$MSG" in
-              *"Fix"*|*"fix"*|*"Correccion"*|*"correccion"*|*"Arreglo"*|*"arreglo"*)
+            case "$line" in
+              *"Fix"*|*"fix"*|*"fix:"*|*"Fix:"*|*"corregir"*|*"Corregir"*|*"arreglar"*|*"Arreglar"*)
                 echo "- $MSG" >> /tmp/correccion.txt ;;
-              *"Add"*|*"add"*|*"Nuevo"*|*"nuevo"*|*"Agregar"*|*"agregar"*)
+              *"Add"*|*"add"*|*"Add:"*|*"add:"*|*"nuevo"*|*"Nuevo"*|*"agregar"*|*"Agregar"*)
                 echo "- $MSG" >> /tmp/nuevo.txt ;;
-              *"Update"*|*"update"*|*"Mejora"*|*"mejora"*)
+              *"Update"*|*"update"*|*"Update:"*|*"update:"*|*"mejora"*|*"Mejora"*|*"cambiar"*|*"Cambiar"*)
                 echo "- $MSG" >> /tmp/mejora.txt ;;
-              *"Remove"*|*"remove"*|*"Eliminar"*|*"eliminar"*)
-                echo "- $MSG" >> /tmp/eliminado.txt ;;
               *)
                 echo "- $MSG" >> /tmp/otro.txt ;;
             esac
           done
           
-          # Generar CHANGELOG.md
           FECHA=$(date "+%d/%m/%Y")
           
           if [ -f VERSION ]; then
@@ -82,12 +79,6 @@ jobs:
           if [ -s /tmp/correccion.txt ]; then
             echo "### Correcciones" >> CHANGELOG.md
             cat /tmp/correccion.txt >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
-          fi
-          
-          if [ -s /tmp/eliminado.txt ]; then
-            echo "### Eliminado" >> CHANGELOG.md
-            cat /tmp/eliminado.txt >> CHANGELOG.md
             echo "" >> CHANGELOG.md
           fi
           
