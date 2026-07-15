@@ -3,9 +3,9 @@ package cu.todus.app.ui.screens.home
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,31 +30,29 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit) {
     val app = context.applicationContext as ToDusApp
     val db = remember { ToDusDatabase.getInstance(context) }
     val jwtManager = remember { JwtManager(context) }
-    
     val chats by db.chatDao().getAllChats().collectAsStateWithLifecycle(emptyList())
     val connectionState by app.xmppClient.connectionState.collectAsState()
     val userName = remember { jwtManager.getAlias() ?: jwtManager.getPhone() ?: "Usuario" }
     val userAvatar = remember { jwtManager.getAvatar() }
 
     Scaffold(
-        topBar = { 
-            HomeTopBar(connectionState, userName, userAvatar) {} 
-        },
+        topBar = { HomeTopBar(connectionState, userName, userAvatar) {} },
         floatingActionButton = {
-            FloatingActionButton(onClick = onNewChat, containerColor = ToDusColors.Red, shape = CircleShape) {
-                Icon(Icons.Default.Add, "Nuevo Chat", tint = ToDusColors.White)
+            ExtendedFloatingActionButton(
+                onClick = onNewChat,
+                containerColor = ToDusColors.Red,
+                contentColor = ToDusColors.White,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Outlined.ChatBubbleOutline, "Nuevo Chat", modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Nuevo Chat", style = MaterialTheme.typography.titleMedium)
             }
         }
     ) { padding ->
         if (chats.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Outlined.ChatBubbleOutline, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("No tienes conversaciones", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), textAlign = TextAlign.Center)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("Toca el boton + para empezar un nuevo chat", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), textAlign = TextAlign.Center)
-                }
+                Icon(Icons.Outlined.ChatBubbleOutline, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 80.dp)) {

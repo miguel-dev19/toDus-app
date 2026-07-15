@@ -1,7 +1,5 @@
 package cu.todus.app.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -18,33 +16,14 @@ import coil.compose.AsyncImage
 import cu.todus.app.ui.theme.ToDusColors
 
 @Composable
-fun ChatListItem(
-    name: String,
-    lastMessage: String,
-    time: String,
-    unreadCount: Int = 0,
-    isOnline: Boolean = false,
-    avatarUrl: String? = null,
-    onClick: () -> Unit
-) {
+fun ChatListItem(name: String, lastMessage: String, time: String, unreadCount: Int = 0, avatarUrl: String? = null, onClick: () -> Unit) {
     Surface(onClick = onClick, color = MaterialTheme.colorScheme.surface) {
         Row(modifier = Modifier.fillMaxWidth().height(72.dp).padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.fillMaxHeight().aspectRatio(1f).padding(8.dp), contentAlignment = Alignment.Center) {
                 Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
-                    if (avatarUrl != null) {
-                        AsyncImage(
-                            model = avatarUrl,
-                            contentDescription = "Foto",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(name.first().uppercase(), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-                        }
-                    }
+                    if (avatarUrl != null) AsyncImage(model = avatarUrl, contentDescription = "Foto", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    else Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(name.first().uppercase(), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold) }
                 }
-                if (isOnline) Box(modifier = Modifier.align(Alignment.BottomEnd).size(14.dp).clip(CircleShape).background(ToDusColors.Green).border(2.dp, MaterialTheme.colorScheme.surface, CircleShape))
             }
             Column(modifier = Modifier.weight(1f).padding(vertical = 12.dp)) {
                 Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = if (unreadCount > 0) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
