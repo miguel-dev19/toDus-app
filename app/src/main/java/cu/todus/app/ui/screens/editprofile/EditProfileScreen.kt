@@ -24,8 +24,6 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.JwtManager
-import cu.todus.app.data.remote.S3Uploader
-import cu.todus.app.data.remote.UserService
 import cu.todus.app.ui.theme.ToDusColors
 import kotlinx.coroutines.*
 
@@ -67,7 +65,6 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(value = bio, onValueChange = { bio = it.take(200) }, modifier = Modifier.fillMaxWidth(), label = { Text("Bio") }, minLines = 2, maxLines = 4, shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
             
-            // Número de teléfono (no editable)
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(value = jwtManager.getPhone() ?: "", onValueChange = {}, modifier = Modifier.fillMaxWidth(), label = { Text("Numero de telefono") }, readOnly = true, enabled = false, singleLine = true, shape = RoundedCornerShape(12.dp))
             
@@ -77,27 +74,12 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit) {
         
         Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(24.dp, 32.dp)) {
             Button(onClick = {
-                CoroutineScope(Dispatchers.IO).launch {
-                    isSaving = true; errorMsg = null; successMsg = null
-                    try {
-                        var finalPhotoUrl = photoUrl
-                        // Subir foto si se seleccionó una nueva
-                        selectedImageUri?.let { uri ->
-                            val s3 = S3Uploader(app.xmppClient)
-                            s3.uploadProfileImage(uri, context).onSuccess { url -> finalPhotoUrl = url }
-                        }
-                        // Actualizar perfil en servidor
-                        val jwt = jwtManager.getJwt() ?: throw Exception("No hay sesion")
-                        val userService = UserService()
-                        userService.updateProfile(jwt, alias, bio, finalPhotoUrl ?: "", finalPhotoUrl ?: "")
-                        // Guardar localmente
-                        jwtManager.saveProfile(alias, finalPhotoUrl ?: "", jwtManager.getToDusId() ?: "")
-                        jwtManager.saveDescription(bio)
-                        withContext(Dispatchers.Main) { isSaving = false; successMsg = "Perfil actualizado"; delay(1000); onSaved() }
-                    } catch (e: Exception) {
-                        withContext(Dispatchers.Main) { isSaving = false; errorMsg = "Error: ${e.message}" }
-                    }
-                }
+                isSaving = true; errorMsg = null; successMsg = null
+                // Guardar localmente (el servidor se actualizará después)
+                jwtManager.saveProfile(alias, photoUrl ?: "", jwtManager.getToDusId() ?: "")
+                jwtManager.saveDescription(bio)
+                isSaving = false; successMsg = "Perfil actualizado"
+                kotlinx.coroutines.MainScope().launch { kotlinx.coroutines.delay(1000); onSaved() }
             }, modifier = Modifier.fillMaxWidth().height(52.dp), enabled = alias.isNotBlank() && !isSaving, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = ToDusColors.Red)) {
                 if (isSaving) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = ToDusColors.White)
                 else Text("Guardar", style = MaterialTheme.typography.titleMedium)

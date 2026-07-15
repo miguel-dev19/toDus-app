@@ -27,6 +27,8 @@ import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.ToDusDatabase
 import cu.todus.app.ui.components.MessageBubble
 import cu.todus.app.ui.theme.ToDusColors
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Composable
 fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactProfile: (String) -> Unit = {}) {
@@ -39,11 +41,10 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
     val isLoadingOffline by viewModel.isLoadingOffline.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     var isTyping by remember { mutableStateOf(false) }
-    var lastSeen by remember { mutableStateOf("en linea") }
+    var lastSeen by remember { mutableStateOf("") }
 
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
     
-    // Cargar last seen al abrir
     LaunchedEffect(chatJid) {
         try {
             app.xmppClient.connection?.let { conn ->
@@ -62,7 +63,7 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                                 diff < 60000 -> "en linea"
                                 diff < 3600000 -> "Hace ${diff/60000}m"
                                 diff < 86400000 -> "Hace ${diff/3600000}h"
-                                else -> java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(last * 1000))
+                                else -> SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(last * 1000))
                             }
                         }
                     }
