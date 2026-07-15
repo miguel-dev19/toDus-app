@@ -3,8 +3,10 @@ package cu.todus.app.data.remote
 import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import org.jivesoftware.smack.ReconnectionManager
 import org.jivesoftware.smack.chat2.ChatManager
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
+import org.jivesoftware.smackx.ping.PingManager
 import org.jxmpp.jid.impl.JidCreate
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -15,13 +17,13 @@ class XmppClient {
     var connection: XMPPTCPConnection? = null
         private set
     private var chatManager: ChatManager? = null
+    private var pingManager: PingManager? = null
+    private var reconnectionManager: ReconnectionManager? = null
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState
     private val _incomingMessages = MutableSharedFlow<ToDusMessage>()
     val incomingMessages: SharedFlow<ToDusMessage> = _incomingMessages
     private val okHttpClient = OkHttpClient()
-    private var pingJob: Job? = null
-    private var reconnectJob: Job? = null
 
     data class ToDusMessage(val id: String, val from: String, val body: String, val timestamp: Long, val xml: String = "")
 
@@ -52,45 +54,26 @@ class XmppClient {
             _connectionState.value = ConnectionState.BEFORE_CONNECTED
             connection?.login(phone, jwt)
             _connectionState.value = ConnectionState.AUTHENTICATED
+            
+            // ChatManager
             chatManager = ChatManager.getInstanceFor(connection)
             setupMessageListener()
-            startPingKeepAlive()
-            startReconnectWatcher(phone, jwt)
+            
+            // PingManager (14 segundos - como la APK original)
+            pingManager = PingManager.getInstanceFor(connection)
+            pingManager?.pingInterval = 14
+            
+            // ReconnectionManager (3 segundos - como la APK original)
+            reconnectionManager = ReconnectionManager(connection)
+            reconnectionManager?.setReconnectionPolicy(ReconnectionManager.ReconnectionPolicy.FIXED_DELAY)
+            reconnectionManager?.fixedDelay = 3
+            reconnectionManager?.enableAutomaticReconnection()
+            
             _connectionState.value = ConnectionState.CONNECTED
             Result.success(Unit)
         } catch (e: Exception) {
             _connectionState.value = ConnectionState.DISCONNECTED
             Result.failure(e)
-        }
-    }
-
-    private fun startPingKeepAlive() {
-        pingJob?.cancel()
-        pingJob = CoroutineScope(Dispatchers.IO).launch {
-            while (isActive) {
-                delay(14000) // 14 segundos como la APK original
-                try {
-                    connection?.sendStanza(org.jivesoftware.smack.packet.StanzaBuilder.buildStanza("<iq type=\"get\" id=\"${randomHexId(8)}\"><ping xmlns=\"urn:xmpp:ping\"/></iq>"))
-                } catch (_: Exception) {}
-            }
-        }
-    }
-
-    private fun startReconnectWatcher(phone: String, jwt: String) {
-        reconnectJob?.cancel()
-        reconnectJob = CoroutineScope(Dispatchers.IO).launch {
-            while (isActive) {
-                delay(3000) // 3 segundos como la APK original
-                if (connection?.isConnected == false && _connectionState.value == ConnectionState.CONNECTED) {
-                    _connectionState.value = ConnectionState.RECONNECTING
-                    try {
-                        connection?.disconnect()
-                        connect(phone, jwt)
-                    } catch (_: Exception) {
-                        _connectionState.value = ConnectionState.DISCONNECTED
-                    }
-                }
-            }
         }
     }
 
@@ -116,8 +99,8 @@ class XmppClient {
     }
 
     fun disconnect() {
-        pingJob?.cancel()
-        reconnectJob?.cancel()
+        pingManager?.cancelPing()
+        reconnectionManager?.disableAutomaticReconnection()
         connection?.disconnect()
         _connectionState.value = ConnectionState.DISCONNECTED
     }
