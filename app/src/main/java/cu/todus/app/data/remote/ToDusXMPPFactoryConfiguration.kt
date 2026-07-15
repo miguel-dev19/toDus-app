@@ -19,15 +19,14 @@ object ToDusXMPPFactoryConfiguration {
         val config = XMPPTCPConnectionConfiguration.builder()
             .setHost(HOST)
             .setPort(PORT)
-            .setXmppDomain(DOMAIN)
+            .setXmppDomain(JidCreate.from(DOMAIN).asDomainBareJid())
             .setResource(resource)
-            .setSecurityMode(SecurityMode.ifpossible)
-            .setCompressionEnabled(false)
-            .setSendPresence(true)
+            .setSecurityMode(SecurityMode.disabled)      // ← APK original
+            .setCompressionEnabled(true)                  // ← APK original
+            .setSendPresence(true)                        // ← APK original
             .setCustomSSLContext(createTrustAllSSLContext())
             .setHostnameVerifier { _, _ -> true }
             .setDebuggerFactory { ToDusXmppDebugger(it) }
-            .setConnectTimeout(30000)
             .build()
         return XMPPTCPConnection(config)
     }

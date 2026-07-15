@@ -68,7 +68,7 @@ class XmppClient {
         pingJob?.cancel()
         pingJob = CoroutineScope(Dispatchers.IO).launch {
             while (isActive) {
-                delay(30000)
+                delay(14000) // 14 segundos como la APK original
                 try {
                     connection?.sendStanza(org.jivesoftware.smack.packet.StanzaBuilder.buildStanza("<iq type=\"get\" id=\"${randomHexId(8)}\"><ping xmlns=\"urn:xmpp:ping\"/></iq>"))
                 } catch (_: Exception) {}
@@ -80,7 +80,7 @@ class XmppClient {
         reconnectJob?.cancel()
         reconnectJob = CoroutineScope(Dispatchers.IO).launch {
             while (isActive) {
-                delay(5000)
+                delay(3000) // 3 segundos como la APK original
                 if (connection?.isConnected == false && _connectionState.value == ConnectionState.CONNECTED) {
                     _connectionState.value = ConnectionState.RECONNECTING
                     try {
