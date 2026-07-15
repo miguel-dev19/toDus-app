@@ -2,15 +2,13 @@ package cu.todus.app.ui.screens.profile
 
 import android.net.Uri
 import android.util.Log
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,15 +26,11 @@ import cu.todus.app.data.local.JwtManager
 import cu.todus.app.ui.theme.ToDusColors
 
 @Composable
-fun ProfileScreen(phone: String, jwt: String, onBack: () -> Unit, onContinue: () -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var toDusId by remember { mutableStateOf("") }
-    var photoUrl by remember { mutableStateOf<String?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
+fun ProfileScreen(phone: String, jwt: String, onBack: () -> Unit, onContinue: () -> Unit, onEditProfile: () -> Unit = {}) {
+    var name by remember { mutableStateOf("") }; var toDusId by remember { mutableStateOf("") }
+    var photoUrl by remember { mutableStateOf<String?>(null) }; var isLoading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
-    val context = LocalContext.current
-    val app = context.applicationContext as ToDusApp
-    val jwtManager = remember { JwtManager(context) }
+    val context = LocalContext.current; val app = context.applicationContext as ToDusApp; val jwtManager = remember { JwtManager(context) }
 
     LaunchedEffect(phone, jwt) {
         if (phone.isNotEmpty() && jwt.isNotEmpty()) {
@@ -59,7 +53,10 @@ fun ProfileScreen(phone: String, jwt: String, onBack: () -> Unit, onContinue: ()
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Column(horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(color = ToDusColors.Red); Spacer(modifier = Modifier.height(16.dp)); Text("Cargando perfil...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         } else {
             Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = onBack, modifier = Modifier.size(40.dp).align(Alignment.Start)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = MaterialTheme.colorScheme.onBackground) }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = MaterialTheme.colorScheme.onBackground) }
+                    TextButton(onClick = onEditProfile) { Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary); Spacer(modifier = Modifier.width(4.dp)); Text("Editar Perfil", color = MaterialTheme.colorScheme.primary) }
+                }
                 Spacer(modifier = Modifier.height(40.dp))
                 Text("Mi perfil", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onBackground)
                 Spacer(modifier = Modifier.height(40.dp))
