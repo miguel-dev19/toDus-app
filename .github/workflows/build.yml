@@ -1,4 +1,4 @@
-name: Build toDus APK
+name: Build y Release
 
 on:
   push:
@@ -15,6 +15,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
     - uses: actions/setup-java@v4
       with:
@@ -27,43 +29,31 @@ jobs:
     - name: Build debug APK
       run: ./gradlew assembleDebug
       
+    - name: Obtener version
+      id: version
+      run: |
+        if [ -f VERSION ]; then
+          echo "v=$(cat VERSION)" >> $GITHUB_OUTPUT
+        else
+          echo "v=0.6.5" >> $GITHUB_OUTPUT
+        fi
+      
     - name: Rename APK
-      run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/toDus_v0.6.5.apk
+      run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/toDus_v${{ steps.version.outputs.v }}.apk
       
     - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
-        name: toDus_v0.6.5
-        path: app/build/outputs/apk/debug/toDus_v0.6.5.apk
+        name: toDus_v${{ steps.version.outputs.v }}
+        path: app/build/outputs/apk/debug/toDus_v${{ steps.version.outputs.v }}.apk
         
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        name: toDus v0.6.5
-        tag_name: v0.6.5
-        files: app/build/outputs/apk/debug/toDus_v0.6.5.apk
-        body: |
-          ## v0.6.5
-          
-          ### Arreglos
-          - Subida de foto de perfil con sockets (100% funcional)
-          - KSP plugin resolution
-          - Puerto XMPP 1756
-          
-          ### Nuevo
-          - Editor de perfil (alias, bio, foto)
-          - Last seen en tiempo real
-          - Indicador de conexion en avatar
-          - Splash screen con logo
-          - FAB rectangular "Nuevo Chat"
-          - Contactos con boton de recargar manual
-          
-          ### Mejoras
-          - S3Uploader sin dependencia de Smack
-          - Tema oscuro completo
-          - Icono oficial PNG
-          - "Escribiendo..." en chat
-          - Perfil de contacto al tocar avatar
+        name: toDus v${{ steps.version.outputs.v }}
+        tag_name: v${{ steps.version.outputs.v }}
+        files: app/build/outputs/apk/debug/toDus_v${{ steps.version.outputs.v }}.apk
+        body_path: CHANGELOG.md
         draft: false
         prerelease: false
       env:
