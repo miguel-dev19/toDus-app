@@ -14,7 +14,6 @@ import cu.todus.app.ui.screens.editprofile.EditProfileScreen
 import cu.todus.app.ui.screens.home.HomeScreen
 import cu.todus.app.ui.screens.contacts.ContactsScreen
 import cu.todus.app.ui.screens.chat.ChatScreen
-import cu.todus.app.ui.screens.contactprofile.ContactProfileScreen
 
 sealed class Screen(val route: String) {
     object Welcome : Screen("welcome")
@@ -24,7 +23,6 @@ sealed class Screen(val route: String) {
     object Home : Screen("home")
     object Contacts : Screen("contacts")
     object Chat : Screen("chat/{jid}/{name}") { fun createRoute(jid: String, name: String) = "chat/$jid/$name" }
-    object ContactProfile : Screen("contact_profile/{jid}") { fun createRoute(jid: String) = "contact_profile/$jid" }
 }
 
 @Composable
@@ -41,11 +39,7 @@ fun NavGraph(navController: NavHostController = rememberNavController(), startDe
         composable(Screen.Contacts.route) { ContactsScreen(onBack = { navController.popBackStack() }, onContactClick = { jid, name -> navController.navigate(Screen.Chat.createRoute(jid, name)) }) }
         composable(route = Screen.Chat.route, arguments = listOf(navArgument("jid") { type = NavType.StringType }, navArgument("name") { type = NavType.StringType })) { backStackEntry ->
             val jid = backStackEntry.arguments?.getString("jid") ?: ""; val name = backStackEntry.arguments?.getString("name") ?: ""
-            ChatScreen(chatJid = jid, chatName = name, onBack = { navController.popBackStack() }, onContactProfile = { contactJid -> navController.navigate(Screen.ContactProfile.createRoute(contactJid)) })
-        }
-        composable(route = Screen.ContactProfile.route, arguments = listOf(navArgument("jid") { type = NavType.StringType })) { backStackEntry ->
-            val jid = backStackEntry.arguments?.getString("jid") ?: ""
-            ContactProfileScreen(contactJid = jid, onBack = { navController.popBackStack() })
+            ChatScreen(chatJid = jid, chatName = name, onBack = { navController.popBackStack() })
         }
     }
 }
