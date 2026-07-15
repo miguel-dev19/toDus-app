@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.JwtManager
+import cu.todus.app.data.remote.S3Uploader
 import cu.todus.app.ui.theme.ToDusColors
 import kotlinx.coroutines.*
 
@@ -32,6 +33,8 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
     val app = context.applicationContext as ToDusApp
     val jwtManager = remember { JwtManager(context) }
+    val phone = remember { jwtManager.getPhone() ?: "" }
+    val jwt = remember { jwtManager.getJwt() ?: "" }
     
     var alias by remember { mutableStateOf(jwtManager.getAlias() ?: "") }
     var bio by remember { mutableStateOf(jwtManager.getDescription() ?: "") }
@@ -61,12 +64,10 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit) {
             
             Spacer(modifier = Modifier.height(32.dp))
             OutlinedTextField(value = alias, onValueChange = { alias = it.take(50) }, modifier = Modifier.fillMaxWidth(), label = { Text("Alias") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Person, null) }, shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
-            
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(value = bio, onValueChange = { bio = it.take(200) }, modifier = Modifier.fillMaxWidth(), label = { Text("Bio") }, minLines = 2, maxLines = 4, shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
-            
             Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(value = jwtManager.getPhone() ?: "", onValueChange = {}, modifier = Modifier.fillMaxWidth(), label = { Text("Numero de telefono") }, readOnly = true, enabled = false, singleLine = true, shape = RoundedCornerShape(12.dp))
+            OutlinedTextField(value = phone, onValueChange = {}, modifier = Modifier.fillMaxWidth(), label = { Text("Numero de telefono") }, readOnly = true, enabled = false, singleLine = true, shape = RoundedCornerShape(12.dp))
             
             if (errorMsg != null) { Spacer(modifier = Modifier.height(8.dp)); Text(errorMsg!!, color = ToDusColors.Error, style = MaterialTheme.typography.bodySmall) }
             if (successMsg != null) { Spacer(modifier = Modifier.height(8.dp)); Text(successMsg!!, color = ToDusColors.Green, style = MaterialTheme.typography.bodySmall) }
@@ -74,12 +75,21 @@ fun EditProfileScreen(onBack: () -> Unit, onSaved: () -> Unit) {
         
         Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(24.dp, 32.dp)) {
             Button(onClick = {
-                isSaving = true; errorMsg = null; successMsg = null
-                // Guardar localmente (el servidor se actualizará después)
-                jwtManager.saveProfile(alias, photoUrl ?: "", jwtManager.getToDusId() ?: "")
-                jwtManager.saveDescription(bio)
-                isSaving = false; successMsg = "Perfil actualizado"
-                kotlinx.coroutines.MainScope().launch { kotlinx.coroutines.delay(1000); onSaved() }
+                CoroutineScope(Dispatchers.IO).launch {
+                    isSaving = true; errorMsg = null; successMsg = null
+                    try {
+                        var finalPhotoUrl = photoUrl
+                        selectedImageUri?.let { uri ->
+                            val s3 = S3Uploader(app.xmppClient)
+                            s3.uploadProfileImage(uri, context, phone, jwt).onSuccess { url -> finalPhotoUrl = url }
+                        }
+                        jwtManager.saveProfile(alias, finalPhotoUrl ?: "", jwtManager.getToDusId() ?: "")
+                        jwtManager.saveDescription(bio)
+                        withContext(Dispatchers.Main) { isSaving = false; successMsg = "Perfil actualizado"; delay(1000); onSaved() }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) { isSaving = false; errorMsg = "Error: ${e.message}" }
+                    }
+                }
             }, modifier = Modifier.fillMaxWidth().height(52.dp), enabled = alias.isNotBlank() && !isSaving, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = ToDusColors.Red)) {
                 if (isSaving) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = ToDusColors.White)
                 else Text("Guardar", style = MaterialTheme.typography.titleMedium)
