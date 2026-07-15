@@ -27,8 +27,6 @@ import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.ToDusDatabase
 import cu.todus.app.ui.components.MessageBubble
 import cu.todus.app.ui.theme.ToDusColors
-import java.text.SimpleDateFormat
-import java.util.*
 
 @Composable
 fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactProfile: (String) -> Unit = {}) {
@@ -44,33 +42,6 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
     var lastSeen by remember { mutableStateOf("") }
 
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
-    
-    LaunchedEffect(chatJid) {
-        try {
-            app.xmppClient.connection?.let { conn ->
-                val iq = cu.todus.app.data.remote.iq.last.LastIQ(org.jxmpp.jid.impl.JidCreate.entityBareFrom("$chatJid@im.todus.cu"), -1)
-                iq.stanzaId = (1..8).map { "abcdef0123456789".random() }.joinToString("")
-                val resp = conn.sendIqRequestAndWaitForResponse(iq)
-                val xml = resp?.toXML()?.toString() ?: ""
-                val last = Regex("last='(-?\\d+)'").find(xml)?.groupValues?.get(1)?.toLongOrNull()
-                if (last != null) {
-                    lastSeen = when {
-                        last == -1L -> ""
-                        last == 0L -> "en linea"
-                        else -> {
-                            val diff = System.currentTimeMillis() - last * 1000
-                            when {
-                                diff < 60000 -> "en linea"
-                                diff < 3600000 -> "Hace ${diff/60000}m"
-                                diff < 86400000 -> "Hace ${diff/3600000}h"
-                                else -> SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(last * 1000))
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (_: Exception) {}
-    }
 
     Scaffold(
         topBar = {
@@ -114,10 +85,7 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
             }
             if (messages.isEmpty() && !isLoadingOffline) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Inicia una conversacion", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                        Spacer(modifier = Modifier.height(4.dp)); Text("Los mensajes estan cifrados de extremo a extremo", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("Inicia una conversacion", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)); Spacer(modifier = Modifier.height(4.dp)); Text("Los mensajes estan cifrados de extremo a extremo", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) }
                 }
             } else {
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
