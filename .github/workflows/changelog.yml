@@ -1,0 +1,109 @@
+name: Generar Changelog
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generar changelog agrupado
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -n "$LAST_TAG" ]; then
+            COMMITS=$(git log ${LAST_TAG}..HEAD --oneline)
+          else
+            COMMITS=$(git log --oneline)
+          fi
+          
+          # Archivos temporales por categoría
+          > /tmp/nuevo.txt
+          > /tmp/correccion.txt
+          > /tmp/mejora.txt
+          > /tmp/eliminado.txt
+          > /tmp/otro.txt
+          
+          echo "$COMMITS" | while read -r line; do
+            MSG=$(echo "$line" | cut -d' ' -f2-)
+            
+            case "$MSG" in
+              *"Fix"*|*"fix"*|*"Correccion"*|*"correccion"*|*"Arreglo"*|*"arreglo"*)
+                echo "- $MSG" >> /tmp/correccion.txt ;;
+              *"Add"*|*"add"*|*"Nuevo"*|*"nuevo"*|*"Agregar"*|*"agregar"*)
+                echo "- $MSG" >> /tmp/nuevo.txt ;;
+              *"Update"*|*"update"*|*"Mejora"*|*"mejora"*)
+                echo "- $MSG" >> /tmp/mejora.txt ;;
+              *"Remove"*|*"remove"*|*"Eliminar"*|*"eliminar"*)
+                echo "- $MSG" >> /tmp/eliminado.txt ;;
+              *)
+                echo "- $MSG" >> /tmp/otro.txt ;;
+            esac
+          done
+          
+          # Generar CHANGELOG.md
+          FECHA=$(date "+%d/%m/%Y")
+          
+          if [ -f VERSION ]; then
+            V=$(cat VERSION)
+            PATCH=$(( $(echo $V | cut -d. -f3) + 1 ))
+            NUEVA="$(echo $V | cut -d. -f1-2).$PATCH"
+          else
+            NUEVA="0.0.1"
+          fi
+          
+          echo "# Registro de Cambios" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## v$NUEVA - $FECHA" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          
+          if [ -s /tmp/nuevo.txt ]; then
+            echo "### Nuevas Funcionalidades" >> CHANGELOG.md
+            cat /tmp/nuevo.txt >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          if [ -s /tmp/mejora.txt ]; then
+            echo "### Mejoras" >> CHANGELOG.md
+            cat /tmp/mejora.txt >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          if [ -s /tmp/correccion.txt ]; then
+            echo "### Correcciones" >> CHANGELOG.md
+            cat /tmp/correccion.txt >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          if [ -s /tmp/eliminado.txt ]; then
+            echo "### Eliminado" >> CHANGELOG.md
+            cat /tmp/eliminado.txt >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          if [ -s /tmp/otro.txt ]; then
+            echo "### Otros Cambios" >> CHANGELOG.md
+            cat /tmp/otro.txt >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+          
+          echo "$NUEVA" > VERSION
+          echo "Nueva version: $NUEVA"
+
+      - name: Commit y push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md VERSION
+          git diff --staged --quiet || git commit -m "Actualizar changelog y version"
+          git push
