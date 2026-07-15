@@ -13,6 +13,7 @@ import cu.todus.app.ui.screens.profile.ProfileScreen
 import cu.todus.app.ui.screens.home.HomeScreen
 import cu.todus.app.ui.screens.contacts.ContactsScreen
 import cu.todus.app.ui.screens.chat.ChatScreen
+import cu.todus.app.ui.screens.contactprofile.ContactProfileScreen
 
 sealed class Screen(val route: String) {
     object Welcome : Screen("welcome")
@@ -25,41 +26,29 @@ sealed class Screen(val route: String) {
     object Chat : Screen("chat/{jid}/{name}") {
         fun createRoute(jid: String, name: String) = "chat/$jid/$name"
     }
+    object ContactProfile : Screen("contact_profile/{jid}") {
+        fun createRoute(jid: String) = "contact_profile/$jid"
+    }
 }
 
 @Composable
 fun NavGraph(navController: NavHostController = rememberNavController(), startDestination: String = Screen.Welcome.route) {
     NavHost(navController = navController, startDestination = startDestination) {
         composable(Screen.Welcome.route) { WelcomeScreen(onContinue = { navController.navigate(Screen.PhoneInput.route) }) }
-        
-        composable(Screen.PhoneInput.route) {
-            PhoneInputScreen(
-                onBack = { navController.popBackStack() },
-                onContinue = { phone, jwt -> navController.navigate(Screen.Profile.createRoute(phone, jwt)) }
-            )
-        }
-        
-        composable(
-            route = Screen.Profile.route,
-            arguments = listOf(navArgument("phone") { type = NavType.StringType }, navArgument("jwt") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val phone = backStackEntry.arguments?.getString("phone") ?: ""
-            val jwt = backStackEntry.arguments?.getString("jwt") ?: ""
+        composable(Screen.PhoneInput.route) { PhoneInputScreen(onBack = { navController.popBackStack() }, onContinue = { phone, jwt -> navController.navigate(Screen.Profile.createRoute(phone, jwt)) }) }
+        composable(route = Screen.Profile.route, arguments = listOf(navArgument("phone") { type = NavType.StringType }, navArgument("jwt") { type = NavType.StringType })) { backStackEntry ->
+            val phone = backStackEntry.arguments?.getString("phone") ?: ""; val jwt = backStackEntry.arguments?.getString("jwt") ?: ""
             ProfileScreen(phone = phone, jwt = jwt, onBack = { navController.popBackStack() }, onContinue = { navController.navigate(Screen.Home.route) { popUpTo(0) } })
         }
-        
-        composable(Screen.Home.route) {
-            HomeScreen(onChatClick = { jid, name -> navController.navigate(Screen.Chat.createRoute(jid, name)) }, onNewChat = { navController.navigate(Screen.Contacts.route) })
-        }
-        
-        composable(Screen.Contacts.route) {
-            ContactsScreen(onBack = { navController.popBackStack() }, onContactClick = { jid, name -> navController.navigate(Screen.Chat.createRoute(jid, name)) })
-        }
-        
+        composable(Screen.Home.route) { HomeScreen(onChatClick = { jid, name -> navController.navigate(Screen.Chat.createRoute(jid, name)) }, onNewChat = { navController.navigate(Screen.Contacts.route) }) }
+        composable(Screen.Contacts.route) { ContactsScreen(onBack = { navController.popBackStack() }, onContactClick = { jid, name -> navController.navigate(Screen.Chat.createRoute(jid, name)) }) }
         composable(route = Screen.Chat.route, arguments = listOf(navArgument("jid") { type = NavType.StringType }, navArgument("name") { type = NavType.StringType })) { backStackEntry ->
+            val jid = backStackEntry.arguments?.getString("jid") ?: ""; val name = backStackEntry.arguments?.getString("name") ?: ""
+            ChatScreen(chatJid = jid, chatName = name, onBack = { navController.popBackStack() }, onContactProfile = { contactJid -> navController.navigate(Screen.ContactProfile.createRoute(contactJid)) })
+        }
+        composable(route = Screen.ContactProfile.route, arguments = listOf(navArgument("jid") { type = NavType.StringType })) { backStackEntry ->
             val jid = backStackEntry.arguments?.getString("jid") ?: ""
-            val name = backStackEntry.arguments?.getString("name") ?: ""
-            ChatScreen(chatJid = jid, chatName = name, onBack = { navController.popBackStack() })
+            ContactProfileScreen(contactJid = jid, onBack = { navController.popBackStack() })
         }
     }
 }
