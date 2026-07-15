@@ -3,10 +3,8 @@ package cu.todus.app.data.remote
 import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import org.jivesoftware.smack.ReconnectionManager
 import org.jivesoftware.smack.chat2.ChatManager
 import org.jivesoftware.smack.tcp.XMPPTCPConnection
-import org.jivesoftware.smackx.ping.PingManager
 import org.jxmpp.jid.impl.JidCreate
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -17,13 +15,14 @@ class XmppClient {
     var connection: XMPPTCPConnection? = null
         private set
     private var chatManager: ChatManager? = null
-    private var pingManager: PingManager? = null
-    private var reconnectionManager: ReconnectionManager? = null
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState
     private val _incomingMessages = MutableSharedFlow<ToDusMessage>()
     val incomingMessages: SharedFlow<ToDusMessage> = _incomingMessages
     private val okHttpClient = OkHttpClient()
+    private var reconnectJob: Job? = null
+    private var savedPhone: String = ""
+    private var savedJwt: String = ""
 
     data class ToDusMessage(val id: String, val from: String, val body: String, val timestamp: Long, val xml: String = "")
 
@@ -48,32 +47,45 @@ class XmppClient {
 
     suspend fun connect(phone: String, jwt: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            savedPhone = phone; savedJwt = jwt
             _connectionState.value = ConnectionState.CONNECTING
             connection = ToDusXMPPFactoryConfiguration.create(phone)
             connection?.connect()
             _connectionState.value = ConnectionState.BEFORE_CONNECTED
             connection?.login(phone, jwt)
             _connectionState.value = ConnectionState.AUTHENTICATED
-            
-            // ChatManager
             chatManager = ChatManager.getInstanceFor(connection)
             setupMessageListener()
-            
-            // PingManager (14 segundos - como la APK original)
-            pingManager = PingManager.getInstanceFor(connection)
-            pingManager?.pingInterval = 14
-            
-            // ReconnectionManager (3 segundos - como la APK original)
-            reconnectionManager = ReconnectionManager(connection)
-            reconnectionManager?.setReconnectionPolicy(ReconnectionManager.ReconnectionPolicy.FIXED_DELAY)
-            reconnectionManager?.fixedDelay = 3
-            reconnectionManager?.enableAutomaticReconnection()
-            
+            startReconnectWatcher()
             _connectionState.value = ConnectionState.CONNECTED
             Result.success(Unit)
         } catch (e: Exception) {
             _connectionState.value = ConnectionState.DISCONNECTED
+            startReconnectWatcher()
             Result.failure(e)
+        }
+    }
+
+    private fun startReconnectWatcher() {
+        reconnectJob?.cancel()
+        reconnectJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isActive) {
+                delay(3000)
+                if (connection?.isConnected != true && savedPhone.isNotEmpty() && savedJwt.isNotEmpty()) {
+                    _connectionState.value = ConnectionState.RECONNECTING
+                    try {
+                        connection?.disconnect()
+                        connection = ToDusXMPPFactoryConfiguration.create(savedPhone)
+                        connection?.connect()
+                        connection?.login(savedPhone, savedJwt)
+                        chatManager = ChatManager.getInstanceFor(connection)
+                        setupMessageListener()
+                        _connectionState.value = ConnectionState.CONNECTED
+                    } catch (e: Exception) {
+                        _connectionState.value = ConnectionState.DISCONNECTED
+                    }
+                }
+            }
         }
     }
 
@@ -99,8 +111,7 @@ class XmppClient {
     }
 
     fun disconnect() {
-        pingManager?.cancelPing()
-        reconnectionManager?.disableAutomaticReconnection()
+        reconnectJob?.cancel()
         connection?.disconnect()
         _connectionState.value = ConnectionState.DISCONNECTED
     }
