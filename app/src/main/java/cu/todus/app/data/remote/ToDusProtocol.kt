@@ -139,3 +139,16 @@ object ToDusProtocol {
     private fun escapeXml(text: String): String = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
     private fun unescapeXml(text: String): String = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'")
 }
+
+    // ═══════ ROSTER OPERATIONS ═══════
+    fun buildRosterDeleteIq(phone: String): String =
+        "<iq type=\"set\" id=\"del_\${randomHex(8)}\"><query xmlns=\"todus:roster:delete\" jid=\"$phone@$DOMAIN\"/></iq>"
+    
+    fun buildRosterUpdateIq(phone: String, aliasBase64: String): String =
+        "<iq type=\"set\" id=\"upd_\${randomHex(8)}\"><query xmlns=\"todus:roster:update\" jid=\"$phone@$DOMAIN\" name=\"$aliasBase64\" subscription=\"both\"/></iq>"
+    
+    fun buildRosterHashIq(): String =
+        "<iq type=\"get\" id=\"rhash_\${randomHex(8)}\"><query xmlns=\"todus:roster:hash\"/></iq>"
+    
+    fun buildRosterVersionIq(): String =
+        "<iq type=\"get\" id=\"rver_\${randomHex(8)}\"><query xmlns=\"todus:users:getrosterversion\"/></iq>"
