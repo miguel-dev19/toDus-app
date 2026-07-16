@@ -50,38 +50,45 @@ fun PhoneInputScreen(onBack: () -> Unit, onContinue: (String, String) -> Unit) {
                 Spacer(modifier = Modifier.height(32.dp))
                 Row(modifier = Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(modifier = Modifier.width(100.dp).height(56.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("\uD83C\uDDE8\uD83C\uDDFA", fontSize = 18.sp)
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("\uD83C\uDDE8\uD83C\uDDFA", fontSize = 18.sp); Spacer(modifier = Modifier.width(6.dp))
                         Text("+53", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     OutlinedTextField(value = phone, onValueChange = { if (it.length <= 8) phone = it.filter { c -> c.isDigit() } }, modifier = Modifier.weight(1f).focusRequester(focusRequester), textStyle = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.onBackground), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), shape = RoundedCornerShape(12.dp), isError = errorMsg != null, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = if (errorMsg != null) ToDusColors.Error else MaterialTheme.colorScheme.primary, unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)))
                 }
-                if (phone.isNotEmpty() && !isValid) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.ErrorOutline, null, tint = ToDusColors.Error, modifier = Modifier.size(16.dp)); Spacer(modifier = Modifier.width(4.dp)); Text(if (phone.length < 8) "El numero debe tener 8 digitos" else "El numero debe comenzar con 5", style = MaterialTheme.typography.bodySmall, color = ToDusColors.Error) }
-                }
-                if (errorMsg != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Surface(color = ToDusColors.Error.copy(alpha = 0.1f), shape = RoundedCornerShape(8.dp)) { Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.ErrorOutline, null, tint = ToDusColors.Error, modifier = Modifier.size(20.dp)); Spacer(modifier = Modifier.width(8.dp)); Text(errorMsg!!, style = MaterialTheme.typography.bodySmall, color = ToDusColors.Error) } }
-                }
-                if (isLoading) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(modifier = Modifier.size(16.dp), color = ToDusColors.Red, strokeWidth = 2.dp); Spacer(modifier = Modifier.width(8.dp)); Text(when (step) { 1 -> "Verificando numero..."; 2 -> "Conectando..."; else -> "Procesando..." }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                }
+                if (phone.isNotEmpty() && !isValid) { Spacer(modifier = Modifier.height(8.dp)); Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.ErrorOutline, null, tint = ToDusColors.Error, modifier = Modifier.size(16.dp)); Spacer(modifier = Modifier.width(4.dp)); Text(if (phone.length < 8) "El numero debe tener 8 digitos" else "El numero debe comenzar con 5", style = MaterialTheme.typography.bodySmall, color = ToDusColors.Error) } }
+                if (errorMsg != null) { Spacer(modifier = Modifier.height(8.dp)); Surface(color = ToDusColors.Error.copy(alpha = 0.1f), shape = RoundedCornerShape(8.dp)) { Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.ErrorOutline, null, tint = ToDusColors.Error, modifier = Modifier.size(20.dp)); Spacer(modifier = Modifier.width(8.dp)); Text(errorMsg!!, style = MaterialTheme.typography.bodySmall, color = ToDusColors.Error) } } }
+                if (isLoading) { Spacer(modifier = Modifier.height(16.dp)); Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(modifier = Modifier.size(16.dp), color = ToDusColors.Red, strokeWidth = 2.dp); Spacer(modifier = Modifier.width(8.dp)); Text(when (step) { 1 -> "Verificando numero..."; 2 -> "Conectando..."; else -> "Procesando..." }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
             }
             Spacer(modifier = Modifier.weight(1f))
             Column(modifier = Modifier.fillMaxWidth().padding(24.dp, 32.dp)) {
                 Button(onClick = {
-                    isLoading = true; errorMsg = null; step = 1
-                    val fullPhone = "53$phone"
+                    isLoading = true; errorMsg = null; step = 1; val fullPhone = "53$phone"
                     CoroutineScope(Dispatchers.IO).launch {
                         app.xmppClient.authenticate(fullPhone).onSuccess { jwt ->
-                            jwtManager.saveJwt(jwt, fullPhone); step = 2
-                            app.xmppClient.connect(fullPhone, jwt).onSuccess { withContext(Dispatchers.Main) { isLoading = false; onContinue(fullPhone, jwt) } }.onFailure { e -> withContext(Dispatchers.Main) { isLoading = false; errorMsg = "Error de conexion: ${e.message}" } }
-                        }.onFailure { withContext(Dispatchers.Main) { isLoading = false; errorMsg = "No se pudo verificar el numero" } }
+                            jwtManager.saveJwt(jwt, fullPhone)
+                            step = 2
+                            app.xmppClient.connect(fullPhone, jwt).onSuccess {
+                                withContext(Dispatchers.Main) {
+                                    isLoading = false
+                                    onContinue(fullPhone, jwt)
+                                }
+                            }.onFailure { e ->
+                                withContext(Dispatchers.Main) {
+                                    isLoading = false
+                                    errorMsg = "Error de conexion: ${e.message}"
+                                }
+                            }
+                        }.onFailure {
+                            withContext(Dispatchers.Main) {
+                                isLoading = false
+                                errorMsg = "No se pudo verificar el numero"
+                            }
+                        }
                     }
-                }, modifier = Modifier.fillMaxWidth().height(52.dp), enabled = isValid && !isLoading, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = ToDusColors.Red)) { if (isLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = ToDusColors.White) else Text("Continuar", style = MaterialTheme.typography.titleMedium) }
+                }, modifier = Modifier.fillMaxWidth().height(52.dp), enabled = isValid && !isLoading, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = ToDusColors.Red)) {
+                    if (isLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = ToDusColors.White) else Text("Continuar", style = MaterialTheme.typography.titleMedium)
+                }
             }
         }
     }

@@ -19,7 +19,7 @@ import cu.todus.app.data.remote.ConnectionState
 import cu.todus.app.ui.theme.ToDusColors
 
 @Composable
-fun HomeTopBar(connectionState: ConnectionState, userName: String, userAvatar: String? = null, onProfileClick: () -> Unit) {
+fun HomeTopBar(connectionState: ConnectionState, userName: String, userAvatar: String? = null) {
     val indicatorColor = when (connectionState) {
         ConnectionState.CONNECTED -> ToDusColors.Green
         ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> ToDusColors.Orange
@@ -27,19 +27,17 @@ fun HomeTopBar(connectionState: ConnectionState, userName: String, userAvatar: S
     }
     
     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
-        Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(start = 16.dp, end = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(start = 16.dp, end = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("toDus", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            Surface(onClick = onProfileClick, shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
-                Row(modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(userName, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 100.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.BottomEnd) {
-                        Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                            if (userAvatar != null) AsyncImage(model = userAvatar, contentDescription = "Foto", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                            else Text(userName.first().uppercase(), fontSize = 16.sp, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
-                        }
-                        Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(indicatorColor))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(userName, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 100.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.BottomEnd) {
+                    Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                        if (userAvatar != null) AsyncImage(model = userAvatar, contentDescription = "Foto", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        else Text(userName.first().uppercase(), fontSize = 16.sp, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
                     }
+                    Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(indicatorColor))
                 }
             }
         }
