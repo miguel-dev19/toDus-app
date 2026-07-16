@@ -24,7 +24,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
-fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit) {
+fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onProfileClick: () -> Unit = {}) {
     val context = LocalContext.current; val app = context.applicationContext as ToDusApp
     val db = remember { ToDusDatabase.getInstance(context) }; val jwtManager = remember { JwtManager(context) }
     val chats by db.chatDao().getAllChats().collectAsStateWithLifecycle(emptyList())
@@ -33,7 +33,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit) {
     val userAvatar = remember { jwtManager.getAvatar() }
 
     Scaffold(
-        topBar = { HomeTopBar(connectionState, userName, userAvatar) },
+        topBar = { HomeTopBar(connectionState, userName, userAvatar, onProfileClick) },
         floatingActionButton = {
             ExtendedFloatingActionButton(onClick = onNewChat, containerColor = ToDusColors.Red, contentColor = ToDusColors.White, shape = RoundedCornerShape(16.dp)) {
                 Icon(Icons.Outlined.ChatBubbleOutline, "Nuevo Chat", modifier = Modifier.size(20.dp)); Spacer(modifier = Modifier.width(8.dp)); Text("Nuevo Chat")
