@@ -16,13 +16,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.JwtManager
 import cu.todus.app.data.remote.ProfileManager
-import cu.todus.app.data.remote.ConnectionState
 import cu.todus.app.ui.theme.ToDusColors
 import kotlinx.coroutines.*
 
@@ -32,14 +30,23 @@ fun ProfileScreen(phone: String, jwt: String, onBack: () -> Unit, onContinue: ()
     var toDusId by remember { mutableStateOf("") }
     var photoUrl by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val app = context.applicationContext as ToDusApp
     val jwtManager = remember { JwtManager(context) }
 
-    LaunchedEffect(phone, jwt) {
+    LaunchedEffect(Unit) {
         try {
-            val cs = app.xmppClient.connectionState.value
-            if (cs == ConnectionState.CONNECTED) {
+            // Esperar a que conecte
+            var retries = 0
+            while (app.xmppClient.connectionState.value != ConnectionState.CONNECTED && retries < 20) {
+                delay(500); retries++
+            }
+            
+            if (app.xmppClient.connectionState.value == ConnectionState.CONNECTED) {
+                // Solicitar perfil
+                app.xmppClient.requestUserInfo(phone)
+                
                 val pm = ProfileManager(app.xmppClient)
                 pm.getProfile(phone).onSuccess { profile ->
                     name = profile.alias.ifEmpty { phone }
@@ -49,14 +56,18 @@ fun ProfileScreen(phone: String, jwt: String, onBack: () -> Unit, onContinue: ()
                 }.onFailure {
                     name = jwtManager.getAlias() ?: phone
                     photoUrl = jwtManager.getAvatar()
+                    toDusId = jwtManager.getToDusId() ?: ""
                 }
             } else {
                 name = jwtManager.getAlias() ?: phone
                 photoUrl = jwtManager.getAvatar()
+                toDusId = jwtManager.getToDusId() ?: ""
             }
         } catch (e: Exception) {
             name = jwtManager.getAlias() ?: phone
             photoUrl = jwtManager.getAvatar()
+            toDusId = jwtManager.getToDusId() ?: ""
+            errorMsg = "Usando datos locales"
         }
         isLoading = false
     }
@@ -88,6 +99,7 @@ fun ProfileScreen(phone: String, jwt: String, onBack: () -> Unit, onContinue: ()
                 Spacer(modifier = Modifier.height(32.dp))
                 OutlinedTextField(value = name, onValueChange = { name = it.take(50) }, modifier = Modifier.fillMaxWidth(), label = { Text("Nombre") }, singleLine = true, shape = RoundedCornerShape(12.dp))
                 if (toDusId.isNotEmpty()) { Spacer(modifier = Modifier.height(8.dp)); Text("@$toDusId", color = MaterialTheme.colorScheme.primary) }
+                if (errorMsg != null) { Spacer(modifier = Modifier.height(8.dp)); Text(errorMsg!!, color = ToDusColors.Error, style = MaterialTheme.typography.bodySmall) }
             }
             Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(24.dp, 32.dp)) {
                 Button(onClick = { jwtManager.saveJwt(jwt, phone); if (name.isNotBlank()) jwtManager.saveProfile(name, photoUrl ?: "", toDusId); onContinue() }, modifier = Modifier.fillMaxWidth().height(52.dp), enabled = name.isNotBlank(), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = ToDusColors.Red)) { Text("Continuar") }

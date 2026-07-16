@@ -21,6 +21,14 @@ class XmppClient {
     private var running = false
     private var readerJob: Job? = null
     private var reconnectJob: Job? = null
+    
+    // Almacenar la última respuesta IQ
+    private var lastIqResponse = ""
+    private var lastIqTime = 0L
+
+    fun getLastIqResponse(): String {
+        return if (System.currentTimeMillis() - lastIqTime < 10000) lastIqResponse else ""
+    }
 
     suspend fun authenticate(phone: String): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -58,6 +66,8 @@ class XmppClient {
     fun sendReceivedReceipt(to: String, msgId: String) = toDusConnection.sendRaw(ToDusProtocol.buildReceivedReceipt(to, msgId))
     fun sendDeliveredReceipt(to: String, msgId: String) = toDusConnection.sendRaw(ToDusProtocol.buildDeliveredReceipt(to, msgId))
     fun requestOfflineMessages() = sendIq(ToDusProtocol.buildOfflineIq())
+    fun requestUserInfo(phone: String) = sendIq(ToDusProtocol.buildGetUserInfoIq(phone))
+    fun requestRoster() = sendIq(ToDusProtocol.buildRosterListIq())
 
     private fun startMessageReader() {
         readerJob = CoroutineScope(Dispatchers.IO).launch {
@@ -74,11 +84,18 @@ class XmppClient {
     private fun processIncomingData(data: String) {
         data.split(Regex("(?<=>)(?=<)")).forEach { stanza ->
             if (stanza.isBlank()) return@forEach
+            
+            // Guardar respuestas IQ (para perfil, contactos, etc.)
+            if (stanza.contains("<iq ") && (stanza.contains("todus:users:getinfo") || 
+                stanza.contains("todus:roster:list") || stanza.contains("t:offline"))) {
+                lastIqResponse = stanza
+                lastIqTime = System.currentTimeMillis()
+            }
+            
             when {
                 ToDusProtocol.isMessage(stanza) -> {
                     val msg = ToDusProtocol.parseIncomingMessage(stanza)
                     if (msg != null) {
-                        // Auto-enviar RD
                         if (!msg.isReceipt && msg.from.isNotEmpty()) {
                             val fromPhone = msg.from.split("@")[0]
                             if (fromPhone != phone) sendReceivedReceipt(fromPhone, msg.id)
