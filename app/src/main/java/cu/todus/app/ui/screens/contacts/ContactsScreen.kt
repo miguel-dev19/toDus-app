@@ -12,16 +12,45 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cu.todus.app.ToDusApp
-import cu.todus.app.data.local.ToDusDatabase
+import cu.todus.app.data.remote.ProfileManager
 import cu.todus.app.ui.components.ContactListItem
+import kotlinx.coroutines.*
 
 @Composable
 fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit) {
     val context = LocalContext.current
-    val db = remember { ToDusDatabase.getInstance(context) }
-    val contacts by db.contactDao().getAllContacts().collectAsStateWithLifecycle(emptyList())
+    val app = context.applicationContext as ToDusApp
+    var contacts by remember { mutableStateOf<List<ProfileManager.RosterContact>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        try {
+            // Esperar conexión
+            var retries = 0
+            while (app.xmppClient.connectionState.value != ConnectionState.CONNECTED && retries < 20) {
+                delay(500); retries++
+            }
+            
+            if (app.xmppClient.connectionState.value == ConnectionState.CONNECTED) {
+                val pm = ProfileManager(app.xmppClient)
+                
+                // Solicitar roster
+                app.xmppClient.requestRoster()
+                delay(2000)
+                
+                pm.getRoster().onSuccess { roster ->
+                    contacts = roster
+                }.onFailure {
+                    errorMsg = "Error al cargar contactos"
+                }
+            }
+        } catch (e: Exception) {
+            errorMsg = e.message
+        }
+        isLoading = false
+    }
 
     Scaffold(
         topBar = {
@@ -33,23 +62,31 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
             }
         }
     ) { padding ->
-        if (contacts.isEmpty()) {
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Cargando contactos...")
+                }
+            }
+        } else if (contacts.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.Person, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("No hay contactos", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                    Text(if (errorMsg != null) errorMsg!! else "No hay contactos", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                 }
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
                 items(contacts, key = { it.phone }) { contact ->
                     ContactListItem(
-                        name = contact.name.ifEmpty { contact.phone },
+                        name = contact.alias.ifEmpty { contact.phone },
                         phone = contact.phone,
-                        avatarUrl = contact.avatarUrl.ifEmpty { null },
-                        isRegistered = contact.isRegistered,
-                        onClick = { onContactClick(contact.phone, contact.name.ifEmpty { contact.phone }) }
+                        avatarUrl = contact.photoUrl.ifEmpty { null },
+                        isRegistered = true,
+                        onClick = { onContactClick(contact.phone, contact.alias.ifEmpty { contact.phone }) }
                     )
                 }
             }

@@ -22,7 +22,6 @@ class XmppClient {
     private var readerJob: Job? = null
     private var reconnectJob: Job? = null
     
-    // Almacenar la última respuesta IQ
     private var lastIqResponse = ""
     private var lastIqTime = 0L
 
@@ -85,9 +84,14 @@ class XmppClient {
         data.split(Regex("(?<=>)(?=<)")).forEach { stanza ->
             if (stanza.isBlank()) return@forEach
             
-            // Guardar respuestas IQ (para perfil, contactos, etc.)
-            if (stanza.contains("<iq ") && (stanza.contains("todus:users:getinfo") || 
-                stanza.contains("todus:roster:list") || stanza.contains("t:offline"))) {
+            if (stanza.contains("<iq ") && (
+                stanza.contains("todus:users:getinfo") || 
+                stanza.contains("todus:roster:list") || 
+                stanza.contains("t:offline") ||
+                stanza.contains("todus:block:get") ||
+                stanza.contains("todus:privacy") ||
+                stanza.contains("todus:muclight:my_mucs")
+            )) {
                 lastIqResponse = stanza
                 lastIqTime = System.currentTimeMillis()
             }
