@@ -1,6 +1,5 @@
 package cu.todus.app.ui.screens.home
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,11 +16,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.JwtManager
 import cu.todus.app.data.local.ToDusDatabase
 import cu.todus.app.data.remote.ConnectionState
+import cu.todus.app.data.remote.ProfileManager
 import cu.todus.app.ui.components.ChatListItem
 import cu.todus.app.ui.components.HomeTopBar
 import cu.todus.app.ui.theme.ToDusColors
@@ -35,9 +36,37 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onP
     val db = remember { ToDusDatabase.getInstance(context) }; val jwtManager = remember { JwtManager(context) }
     val chats by db.chatDao().getAllChats().collectAsStateWithLifecycle(emptyList())
     val connectionState by app.xmppClient.connectionState.collectAsState()
-    val userName = remember { jwtManager.getAlias() ?: jwtManager.getPhone() ?: "Usuario" }
-    val userAvatar = remember { jwtManager.getAvatar() }
+    var userName by remember { mutableStateOf(jwtManager.getAlias() ?: jwtManager.getPhone() ?: "Usuario") }
+    var userAvatar by remember { mutableStateOf(jwtManager.getAvatar()) }
     val totalUnread = chats.sumOf { it.unreadCount }
+    val scope = rememberCoroutineScope()
+
+    // Solo pedir perfil al servidor si NO se ha pedido antes
+    LaunchedEffect(Unit) {
+        if (!jwtManager.isProfileFetched()) {
+            val phone = jwtManager.getPhone() ?: return@LaunchedEffect
+            try {
+                var retries = 0
+                while (app.xmppClient.connectionState.value != ConnectionState.CONNECTED && retries < 20) {
+                    delay(500); retries++
+                }
+                if (app.xmppClient.connectionState.value == ConnectionState.CONNECTED) {
+                    app.xmppClient.requestUserInfo(phone)
+                    delay(2000)
+                    val pm = ProfileManager(app.xmppClient)
+                    pm.getProfile(phone).onSuccess { profile ->
+                        val alias = profile.alias.ifEmpty { phone }
+                        val photo = profile.photoUrl
+                        userName = alias
+                        userAvatar = photo
+                        jwtManager.saveProfile(alias, photo, profile.toDusId)
+                        jwtManager.saveDescription(profile.description)
+                        jwtManager.markProfileFetched()
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
 
     Scaffold(
         topBar = { HomeTopBar(connectionState, userName, userAvatar, onProfileClick) },
@@ -71,7 +100,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onP
                     val dismissState = rememberSwipeToDismissBoxState(
                         confirmValueChange = { value ->
                             if (value == SwipeToDismissBoxValue.EndToStart) {
-                                CoroutineScope(Dispatchers.IO).launch {
+                                scope.launch(Dispatchers.IO) {
                                     db.chatDao().delete(chat)
                                     db.chatDao().deleteMessages(chat.jid)
                                 }

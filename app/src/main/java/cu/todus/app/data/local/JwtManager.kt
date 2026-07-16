@@ -16,6 +16,7 @@ class JwtManager(context: Context) {
         private const val KEY_EXP = "jwt_exp"; private const val KEY_ALIAS = "alias"
         private const val KEY_AVATAR = "avatar"; private const val KEY_TODUS_ID = "todus_id"
         private const val KEY_DESCRIPTION = "description"
+        private const val KEY_PROFILE_FETCHED = "profile_fetched"
     }
     
     fun saveJwt(jwt: String, phone: String) {
@@ -29,6 +30,10 @@ class JwtManager(context: Context) {
     fun saveDescription(description: String) {
         prefs.edit().putString(KEY_DESCRIPTION, description).apply()
     }
+    fun markProfileFetched() {
+        prefs.edit().putBoolean(KEY_PROFILE_FETCHED, true).apply()
+    }
+    fun isProfileFetched(): Boolean = prefs.getBoolean(KEY_PROFILE_FETCHED, false)
     
     fun getJwt(): String? = prefs.getString(KEY_JWT, null)
     fun getPhone(): String? = prefs.getString(KEY_PHONE, null)
