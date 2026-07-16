@@ -47,7 +47,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onP
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 80.dp)) {
                 items(chats, key = { it.jid }) { chat ->
-                    val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(chat.lastTimestamp))
+                    val timeStr = if (chat.lastTimestamp > 0) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(chat.lastTimestamp)) else ""
                     ChatListItem(name = chat.name.ifEmpty { chat.jid }, lastMessage = chat.lastMessage, time = timeStr, unreadCount = chat.unreadCount, avatarUrl = chat.avatarUrl.ifEmpty { null }, onClick = { onChatClick(chat.jid, chat.name.ifEmpty { chat.jid }) })
                 }
             }
