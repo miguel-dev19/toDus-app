@@ -1,30 +1,26 @@
 package cu.todus.app.data.remote
 
-import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import org.jivesoftware.smack.chat2.ChatManager
-import org.jivesoftware.smack.tcp.XMPPTCPConnection
-import org.jxmpp.jid.impl.JidCreate
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.UUID
 
+enum class ConnectionState { DISCONNECTED, CONNECTING, CONNECTED, RECONNECTING, FAILED }
+
 class XmppClient {
-    var connection: XMPPTCPConnection? = null
-        private set
-    private var chatManager: ChatManager? = null
+    private val toDusConnection = ToDusConnection()
+    private val okHttpClient = OkHttpClient()
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState
-    private val _incomingMessages = MutableSharedFlow<ToDusMessage>()
+    private val _incomingMessages = MutableSharedFlow<ToDusMessage>(replay = 0, extraBufferCapacity = 64)
     val incomingMessages: SharedFlow<ToDusMessage> = _incomingMessages
-    private val okHttpClient = OkHttpClient()
+    private var phone: String = ""
+    private var jwt: String = ""
+    private var running = false
+    private var readerJob: Job? = null
     private var reconnectJob: Job? = null
-    private var savedPhone: String = ""
-    private var savedJwt: String = ""
-
-    data class ToDusMessage(val id: String, val from: String, val body: String, val timestamp: Long, val xml: String = "")
 
     fun randomHexId(len: Int = 16): String = (1..len).map { "abcdef0123456789".random() }.joinToString("")
 
@@ -34,12 +30,9 @@ class XmppClient {
             val phoneBytes = phone.toByteArray()
             val secretBytes = uuid.toByteArray().sliceArray(0..31)
             val body = byteArrayOf(0x0a, phoneBytes.size.toByte()) + phoneBytes + byteArrayOf(0x12, 32) + secretBytes
-            val request = Request.Builder()
-                .url("https://auth.todus.cu/v2/auth/token")
-                .header("Content-Type", "application/x-protobuf")
-                .header("User-Agent", "ToDus 2.1.2 Auth")
-                .post(body.toRequestBody("application/x-protobuf".toMediaType()))
-                .build()
+            val request = Request.Builder().url("https://auth.todus.cu/v2/auth/token")
+                .header("Content-Type", "application/x-protobuf").header("User-Agent", "ToDus 2.1.2 Auth")
+                .post(body.toRequestBody("application/x-protobuf".toMediaType())).build()
             val response = okHttpClient.newCall(request).execute()
             Result.success(response.body?.string() ?: "")
         } catch (e: Exception) { Result.failure(e) }
@@ -47,72 +40,75 @@ class XmppClient {
 
     suspend fun connect(phone: String, jwt: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            savedPhone = phone; savedJwt = jwt
+            this@XmppClient.phone = phone; this@XmppClient.jwt = jwt
             _connectionState.value = ConnectionState.CONNECTING
-            connection = ToDusXMPPFactoryConfiguration.create(phone)
-            connection?.connect()
-            _connectionState.value = ConnectionState.BEFORE_CONNECTED
-            connection?.login(phone, jwt)
-            _connectionState.value = ConnectionState.AUTHENTICATED
-            chatManager = ChatManager.getInstanceFor(connection)
-            setupMessageListener()
-            startReconnectWatcher()
-            _connectionState.value = ConnectionState.CONNECTED
-            Result.success(Unit)
+            val result = toDusConnection.handshake(phone, jwt)
+            result.onSuccess {
+                _connectionState.value = ConnectionState.CONNECTED
+                running = true
+                startMessageReader()
+                startReconnectWatcher()
+            }.onFailure { _connectionState.value = ConnectionState.FAILED }
+            result.map { Unit }
         } catch (e: Exception) {
-            _connectionState.value = ConnectionState.DISCONNECTED
-            startReconnectWatcher()
+            _connectionState.value = ConnectionState.FAILED
             Result.failure(e)
+        }
+    }
+
+    fun sendMessage(to: String, text: String): String {
+        val msgId = ToDusProtocol.randomHex(16)
+        val xml = ToDusProtocol.buildOutgoingMessage(to, text, msgId)
+        toDusConnection.sendRaw(xml)
+        return msgId
+    }
+
+    fun sendIq(xml: String) { toDusConnection.sendRaw(xml) }
+
+    private fun startMessageReader() {
+        readerJob = CoroutineScope(Dispatchers.IO).launch {
+            while (running) {
+                try {
+                    val data = toDusConnection.readRaw()
+                    if (!data.isNullOrBlank()) {
+                        val msg = ToDusProtocol.parseIncomingMessage(data)
+                        if (msg != null) _incomingMessages.tryEmit(msg)
+                        // Also parse offline messages
+                        if (data.contains("<query xmlns=\"t:offline\"")) {
+                            ToDusProtocol.parseOfflineMessages(data).forEach { _incomingMessages.tryEmit(it) }
+                        }
+                    }
+                } catch (_: Exception) {}
+                delay(100)
+            }
         }
     }
 
     private fun startReconnectWatcher() {
         reconnectJob?.cancel()
         reconnectJob = CoroutineScope(Dispatchers.IO).launch {
-            while (isActive) {
+            while (running) {
                 delay(3000)
-                if (connection?.isConnected != true && savedPhone.isNotEmpty() && savedJwt.isNotEmpty()) {
-                    _connectionState.value = ConnectionState.RECONNECTING
-                    try {
-                        connection?.disconnect()
-                        connection = ToDusXMPPFactoryConfiguration.create(savedPhone)
-                        connection?.connect()
-                        connection?.login(savedPhone, savedJwt)
-                        chatManager = ChatManager.getInstanceFor(connection)
-                        setupMessageListener()
-                        _connectionState.value = ConnectionState.CONNECTED
-                    } catch (e: Exception) {
-                        _connectionState.value = ConnectionState.DISCONNECTED
+                try {
+                    toDusConnection.sendRaw(" ")
+                } catch (_: Exception) {
+                    if (running && phone.isNotEmpty() && jwt.isNotEmpty()) {
+                        _connectionState.value = ConnectionState.RECONNECTING
+                        try {
+                            toDusConnection.close()
+                            connect(phone, jwt)
+                        } catch (_: Exception) { _connectionState.value = ConnectionState.DISCONNECTED }
                     }
                 }
             }
         }
     }
 
-    private fun setupMessageListener() {
-        chatManager?.addIncomingListener { _, message, _ ->
-            val msg = ToDusMessage(
-                id = message.stanzaId ?: randomHexId(16),
-                from = message.from.asBareJid().toString().split("@")[0],
-                body = message.body ?: "",
-                timestamp = System.currentTimeMillis()
-            )
-            _incomingMessages.tryEmit(msg)
-        }
-    }
-
-    suspend fun sendMessage(to: String, text: String): String {
-        val msgId = randomHexId(16)
-        val jid = JidCreate.entityBareFrom("$to@im.todus.cu")
-        val msg = org.jivesoftware.smack.packet.Message(jid, org.jivesoftware.smack.packet.Message.Type.chat)
-        msg.stanzaId = msgId; msg.body = text
-        chatManager?.chatWith(jid)?.send(msg)
-        return msgId
-    }
-
     fun disconnect() {
+        running = false
+        readerJob?.cancel()
         reconnectJob?.cancel()
-        connection?.disconnect()
+        toDusConnection.close()
         _connectionState.value = ConnectionState.DISCONNECTED
     }
 }
