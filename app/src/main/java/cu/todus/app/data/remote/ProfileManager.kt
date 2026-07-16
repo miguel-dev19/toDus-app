@@ -1,16 +1,16 @@
 package cu.todus.app.data.remote
 
-import android.content.Context
 import android.util.Base64
-import cu.todus.app.data.local.JwtManager
 import cu.todus.app.data.local.dao.ContactDao
+import cu.todus.app.data.local.dao.ProfileDao
 import cu.todus.app.data.local.entity.ContactEntity
+import cu.todus.app.data.local.entity.ProfileEntity
 import kotlinx.coroutines.*
 
 class ProfileManager(
     private val xmppClient: XmppClient,
-    private val contactDao: ContactDao? = null,
-    private val jwtManager: JwtManager? = null
+    private val profileDao: ProfileDao? = null,
+    private val contactDao: ContactDao? = null
 ) {
 
     data class UserProfile(
@@ -25,13 +25,40 @@ class ProfileManager(
         val photoThumbUrl: String = "", val official: Boolean = false
     )
 
-    suspend fun getProfile(phone: String): Result<UserProfile> = withContext(Dispatchers.IO) {
+    /**
+     * Obtiene perfil: primero intenta Room (cache), luego servidor.
+     */
+    suspend fun getProfile(phone: String, forceRefresh: Boolean = false): Result<UserProfile> = withContext(Dispatchers.IO) {
         try {
+            // 1. Intentar cache
+            if (!forceRefresh) {
+                val cached = profileDao?.getProfile(phone)
+                if (cached != null && System.currentTimeMillis() - cached.lastUpdated < 3600000) { // 1 hora
+                    return@withContext Result.success(UserProfile(
+                        username = cached.phone, alias = cached.alias, description = cached.description,
+                        photoUrl = cached.photoUrl, photoThumbUrl = cached.photoThumbUrl,
+                        toDusId = cached.todusId, official = cached.official, exists = cached.exists
+                    ))
+                }
+            }
+            
+            // 2. Pedir al servidor
             xmppClient.sendIq(ToDusProtocol.buildGetUserInfoIq(phone))
             val response = waitForIqResponse()
+            
             if (response.isNotEmpty() && response.contains("<user ")) {
-                Result.success(parseUserInfo(response, phone))
+                val profile = parseUserInfo(response, phone)
+                
+                // Guardar en Room
+                profileDao?.insert(ProfileEntity(
+                    phone = phone, alias = profile.alias, description = profile.description,
+                    photoUrl = profile.photoUrl, photoThumbUrl = profile.photoThumbUrl,
+                    todusId = profile.toDusId, official = profile.official, exists = profile.exists
+                ))
+                
+                Result.success(profile)
             } else {
+                // Devolver datos básicos
                 Result.success(UserProfile(username = phone, alias = phone, description = "",
                     photoUrl = "", photoThumbUrl = "", toDusId = "", official = false, exists = true))
             }
@@ -39,20 +66,15 @@ class ProfileManager(
     }
     
     /**
-     * Obtiene contactos que usan ToDus.
-     * Primero obtiene el roster, luego verifica cada uno.
-     * Los guarda en Room para acceso offline.
+     * Obtiene contactos que usan ToDus y guarda en Room.
      */
     suspend fun getRosterWithToDusUsers(): Result<List<RosterContact>> = withContext(Dispatchers.IO) {
         try {
-            // 1. Obtener roster
             xmppClient.sendIq(ToDusProtocol.buildRosterListIq())
             val response = waitForIqResponse(5000)
             if (response.isEmpty()) return@withContext Result.success(emptyList())
             
             val rawContacts = ToDusProtocol.parseRosterContacts(response)
-            
-            // 2. Verificar cada contacto
             val todusUsers = mutableListOf<RosterContact>()
             
             for ((phone, aliasB64) in rawContacts) {
@@ -81,10 +103,14 @@ class ProfileManager(
                             bio = desc, photoUrl = picUrl, photoThumbUrl = picThumb)
                         todusUsers.add(contact)
                         
-                        // Guardar en Room
+                        // Guardar en Room: ContactEntity + ProfileEntity
                         contactDao?.insert(ContactEntity(phone = phone, name = displayName,
                             alias = displayName, avatarUrl = picThumb.ifEmpty { picUrl },
                             todusId = todusId, isRegistered = true))
+                        
+                        profileDao?.insert(ProfileEntity(phone = phone, alias = displayName,
+                            description = desc, photoUrl = picUrl, photoThumbUrl = picThumb,
+                            todusId = todusId, exists = true))
                     }
                 }
             }
@@ -94,30 +120,29 @@ class ProfileManager(
     }
     
     /**
-     * Carga contactos desde Room (offline) mientras se actualiza del servidor.
+     * Carga perfiles desde Room (offline).
      */
-    suspend fun getCachedContacts(): List<RosterContact> {
-        return contactDao?.getAllContactsOnce()?.map { entity ->
-            RosterContact(phone = entity.phone, alias = entity.alias.ifEmpty { entity.name },
-                todusId = entity.todusId, photoUrl = entity.avatarUrl)
+    suspend fun getCachedProfiles(): List<UserProfile> {
+        return profileDao?.getAllProfilesOnce()?.map { entity ->
+            UserProfile(username = entity.phone, alias = entity.alias,
+                description = entity.description, photoUrl = entity.photoUrl,
+                photoThumbUrl = entity.photoThumbUrl, toDusId = entity.todusId,
+                official = entity.official, exists = entity.exists)
         } ?: emptyList()
     }
+    
+    /**
+     * Observa el perfil de un usuario (Flow reactivo desde Room).
+     */
+    fun observeProfile(phone: String) = profileDao?.getProfileFlow(phone)
     
     suspend fun deleteContact(phone: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             xmppClient.sendIq(ToDusProtocol.buildRosterDeleteIq(phone))
             contactDao?.delete(ContactEntity(phone = phone, name = ""))
+            profileDao?.delete(ProfileEntity(phone = phone))
             Result.success(Unit)
         } catch (e: Exception) { Result.failure(e) }
-    }
-    
-    suspend fun getBlockedList(): Result<List<String>> = withContext(Dispatchers.IO) {
-        try {
-            xmppClient.sendIq(ToDusProtocol.buildBlockListIq())
-            val response = waitForIqResponse()
-            val blist = extractAttr(response, "blist") ?: ""
-            Result.success(blist.split(",").filter { it.isNotEmpty() })
-        } catch (e: Exception) { Result.success(emptyList()) }
     }
     
     private suspend fun waitForIqResponse(timeout: Long = 5000): String {

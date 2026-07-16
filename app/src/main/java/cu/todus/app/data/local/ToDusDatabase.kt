@@ -7,19 +7,22 @@ import androidx.room.RoomDatabase
 import cu.todus.app.data.local.dao.ChatDao
 import cu.todus.app.data.local.dao.ContactDao
 import cu.todus.app.data.local.dao.MessageDao
+import cu.todus.app.data.local.dao.ProfileDao
 import cu.todus.app.data.local.entity.ChatEntity
 import cu.todus.app.data.local.entity.ContactEntity
 import cu.todus.app.data.local.entity.MessageEntity
+import cu.todus.app.data.local.entity.ProfileEntity
 
 @Database(
-    entities = [MessageEntity::class, ChatEntity::class, ContactEntity::class],
-    version = 2,
+    entities = [MessageEntity::class, ChatEntity::class, ContactEntity::class, ProfileEntity::class],
+    version = 3,
     exportSchema = false
 )
 abstract class ToDusDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun chatDao(): ChatDao
     abstract fun contactDao(): ContactDao
+    abstract fun profileDao(): ProfileDao
 
     companion object {
         @Volatile
