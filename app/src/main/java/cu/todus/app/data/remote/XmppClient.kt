@@ -1,5 +1,6 @@
 package cu.todus.app.data.remote
 
+import android.content.Context
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import okhttp3.*
@@ -9,18 +10,23 @@ import java.util.UUID
 
 enum class ConnectionState { DISCONNECTED, CONNECTING, CONNECTED, RECONNECTING, FAILED }
 
-class XmppClient {
+class XmppClient(private val context: Context? = null) {
     private val toDusConnection = ToDusConnection()
     private val okHttpClient = OkHttpClient()
+    private val networkMonitor = context?.let { NetworkMonitor(it) }
+    
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState
+    
     private val _incomingMessages = MutableSharedFlow<ToDusMessage>(replay = 0, extraBufferCapacity = 64)
     val incomingMessages: SharedFlow<ToDusMessage> = _incomingMessages
+    
     private var phone: String = ""
     private var jwt: String = ""
     private var running = false
     private var readerJob: Job? = null
     private var reconnectJob: Job? = null
+    private var reconnectAttempts = 0
     
     private var lastIqResponse = ""
     private var lastIqTime = 0L
@@ -48,8 +54,15 @@ class XmppClient {
             this@XmppClient.phone = phone; this@XmppClient.jwt = jwt
             _connectionState.value = ConnectionState.CONNECTING
             toDusConnection.handshake(phone, jwt).onSuccess {
-                _connectionState.value = ConnectionState.CONNECTED; running = true
+                _connectionState.value = ConnectionState.CONNECTED
+                running = true; reconnectAttempts = 0
                 startMessageReader(); startReconnectWatcher()
+                // Observar cambios de red
+                networkMonitor?.state?.collect { netState ->
+                    if (!netState.isAvailable && running) {
+                        _connectionState.value = ConnectionState.DISCONNECTED
+                    }
+                }
             }.onFailure { _connectionState.value = ConnectionState.FAILED }
             Result.success(Unit)
         } catch (e: Exception) { _connectionState.value = ConnectionState.FAILED; Result.failure(e) }
@@ -122,9 +135,16 @@ class XmppClient {
                 try { toDusConnection.sendRaw(" ") }
                 catch (_: Exception) {
                     if (running && phone.isNotEmpty() && jwt.isNotEmpty()) {
-                        _connectionState.value = ConnectionState.RECONNECTING
-                        try { toDusConnection.close(); connect(phone, jwt) }
-                        catch (_: Exception) { _connectionState.value = ConnectionState.DISCONNECTED }
+                        reconnectAttempts++
+                        if (reconnectAttempts <= 10) {
+                            _connectionState.value = ConnectionState.RECONNECTING
+                            val delay = (2000L * (1L shl minOf(reconnectAttempts, 5)))
+                            delay(delay)
+                            try { toDusConnection.close(); connect(phone, jwt) }
+                            catch (_: Exception) { _connectionState.value = ConnectionState.DISCONNECTED }
+                        } else {
+                            _connectionState.value = ConnectionState.FAILED
+                        }
                     }
                 }
             }
@@ -132,7 +152,11 @@ class XmppClient {
     }
 
     fun disconnect() {
-        running = false; readerJob?.cancel(); reconnectJob?.cancel()
-        toDusConnection.close(); _connectionState.value = ConnectionState.DISCONNECTED
+        running = false
+        readerJob?.cancel(); reconnectJob?.cancel()
+        networkMonitor?.stop()
+        toDusConnection.close()
+        reconnectAttempts = 0
+        _connectionState.value = ConnectionState.DISCONNECTED
     }
 }

@@ -11,6 +11,6 @@ class ToDusApp : Application() {
     override fun onCreate() {
         super.onCreate()
         database = ToDusDatabase.getInstance(this)
-        xmppClient = XmppClient()
+        xmppClient = XmppClient(this)
     }
 }
