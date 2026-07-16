@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.ToDusDatabase
@@ -50,7 +51,7 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(chatName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface)
-                            if (lastSeen.isNotEmpty()) Text(lastSeen, style = MaterialTheme.typography.labelSmall, color = if (lastSeen == "en linea") ToDusColors.Green else MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (lastSeen.isNotEmpty()) Text(lastSeen, style = MaterialTheme.typography.labelSmall, color = Color.Black)
                         }
                     }
                 }
