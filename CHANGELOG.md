@@ -1,11 +1,13 @@
 # Registro de Cambios
 
-## v0.6.25 - 16/07/2026
+## v0.6.26 - 16/07/2026
 
 ### Correcciones
 - Arreglar carga de perfil y contactos: procesar respuestas IQ del servidor
 
 ### Otros Cambios
+- ProfileDao: guardar perfiles de usuarios en Room + cache offline de 1 hora
+- Actualizar changelog y version
 - NetworkMonitor: detección de cambios de red + reconexión con backoff exponencial
 - Actualizar changelog y version
 - Roster completo: listar, eliminar, hash, versión + cache offline en Room
