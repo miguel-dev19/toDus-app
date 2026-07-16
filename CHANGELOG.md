@@ -1,11 +1,13 @@
 # Registro de Cambios
 
-## v0.6.32 - 16/07/2026
+## v0.6.33 - 16/07/2026
 
 ### Correcciones
 - Arreglar carga de perfil y contactos: procesar respuestas IQ del servidor
 
 ### Otros Cambios
+- Verificación final: ChatScreen sin AsyncImage innecesario, NavGraph completo
+- Actualizar changelog y version
 - Iconos de estado en mensajes: reloj=enviando, check=enviado, doble check=entregado, doble check verde=leído
 - Actualizar changelog y version
 - Revertir a UI original exacta manteniendo solo estilo Telegram (colores, bordes, sombras)
