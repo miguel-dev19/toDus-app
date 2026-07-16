@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import cu.todus.app.data.local.dao.ChatDao
 import cu.todus.app.data.local.dao.MessageDao
 import cu.todus.app.data.local.entity.MessageEntity
-import cu.todus.app.data.remote.OfflineManager
+import cu.todus.app.data.remote.ToDusProtocol
 import cu.todus.app.data.remote.XmppClient
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -16,74 +16,56 @@ class ChatViewModel(
     private val messageDao: MessageDao,
     private val chatDao: ChatDao
 ) : ViewModel() {
-    
     private val _messages = MutableStateFlow<List<MessageEntity>>(emptyList())
     val messages: StateFlow<List<MessageEntity>> = _messages
-    
     private val _messageText = MutableStateFlow("")
     val messageText: StateFlow<String> = _messageText
-    
     private val _isLoadingOffline = MutableStateFlow(false)
     val isLoadingOffline: StateFlow<Boolean> = _isLoadingOffline
-    
-    init {
-        loadMessages()
-        observeIncoming()
-        downloadOfflineMessages()
-    }
-    
+    private var lastSeen by mutableStateOf("")
+
+    init { loadMessages(); observeIncoming(); requestOffline() }
+
     private fun loadMessages() {
-        viewModelScope.launch {
-            messageDao.getMessages(chatJid).collect { msgs ->
-                _messages.value = msgs
-            }
-        }
+        viewModelScope.launch { messageDao.getMessages(chatJid).collect { _messages.value = it } }
     }
-    
+
     private fun observeIncoming() {
         viewModelScope.launch {
             xmppClient.incomingMessages.collect { msg ->
-                if (msg.from == chatJid) {
-                    messageDao.insert(
-                        MessageEntity(
-                            id = msg.id, chatJid = chatJid, senderPhone = msg.from,
-                            body = msg.body, type = "text", state = "received",
-                            timestamp = msg.timestamp
-                        )
-                    )
+                if (msg.from.split("@")[0] == chatJid || msg.from == chatJid) {
+                    messageDao.insert(MessageEntity(id = msg.id, chatJid = chatJid, senderPhone = msg.from.split("@")[0], body = msg.body, type = "text", state = "received", timestamp = msg.timestamp))
                     chatDao.updateLastMessage(chatJid, msg.body, msg.timestamp)
                     chatDao.clearUnread(chatJid)
                 }
             }
         }
     }
-    
-    private fun downloadOfflineMessages() {
+
+    private fun requestOffline() {
         viewModelScope.launch {
-            val conn = xmppClient.connection ?: return@launch
             _isLoadingOffline.value = true
-            val offlineManager = OfflineManager(conn, messageDao, chatDao)
-            offlineManager.downloadOfflineMessages()
+            xmppClient.sendIq(ToDusProtocol.buildOfflineIq())
             _isLoadingOffline.value = false
         }
     }
-    
+
     fun onMessageTextChanged(text: String) { _messageText.value = text }
-    
+
     fun sendMessage() {
         val text = _messageText.value.trim()
         if (text.isEmpty()) return
         viewModelScope.launch {
             _messageText.value = ""
             val msgId = xmppClient.sendMessage(chatJid, text)
-            messageDao.insert(
-                MessageEntity(
-                    id = msgId, chatJid = chatJid, senderPhone = "me",
-                    body = text, type = "text", state = "sent",
-                    timestamp = System.currentTimeMillis()
-                )
-            )
+            messageDao.insert(MessageEntity(id = msgId, chatJid = chatJid, senderPhone = "me", body = text, type = "text", state = "sent", timestamp = System.currentTimeMillis()))
             chatDao.updateLastMessage(chatJid, text, System.currentTimeMillis())
+        }
+    }
+
+    fun requestLastSeen() {
+        viewModelScope.launch {
+            xmppClient.sendIq(ToDusProtocol.buildLastIq(chatJid))
         }
     }
 }

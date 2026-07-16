@@ -71,11 +71,23 @@ class XmppClient {
                 try {
                     val data = toDusConnection.readRaw()
                     if (!data.isNullOrBlank()) {
-                        val msg = ToDusProtocol.parseIncomingMessage(data)
-                        if (msg != null) _incomingMessages.tryEmit(msg)
-                        // Also parse offline messages
-                        if (data.contains("<query xmlns=\"t:offline\"")) {
-                            ToDusProtocol.parseOfflineMessages(data).forEach { _incomingMessages.tryEmit(it) }
+                        // Parsear mensajes normales
+                        val msgs = data.split(Regex("(?<=>)(?=<)"))
+                        for (stanza in msgs) {
+                            if (stanza.isBlank()) continue
+                            
+                            // Intentar parsear como mensaje
+                            val msg = ToDusProtocol.parseIncomingMessage(stanza)
+                            if (msg != null) {
+                                _incomingMessages.tryEmit(msg)
+                            }
+                            
+                            // Parsear mensajes offline
+                            if (stanza.contains("<query xmlns=\"t:offline\"")) {
+                                ToDusProtocol.parseOfflineMessages(stanza).forEach {
+                                    _incomingMessages.tryEmit(it)
+                                }
+                            }
                         }
                     }
                 } catch (_: Exception) {}
