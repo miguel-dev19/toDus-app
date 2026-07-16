@@ -1,5 +1,6 @@
 package cu.todus.app.ui.screens.chat
 
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cu.todus.app.data.local.dao.ChatDao
@@ -22,6 +23,8 @@ class ChatViewModel(
     val messageText: StateFlow<String> = _messageText
     private val _isLoadingOffline = MutableStateFlow(false)
     val isLoadingOffline: StateFlow<Boolean> = _isLoadingOffline
+    var lastSeen by mutableStateOf("")
+        private set
 
     init { loadMessages(); observeIncoming(); requestOffline() }
 
@@ -32,22 +35,10 @@ class ChatViewModel(
     private fun observeIncoming() {
         viewModelScope.launch {
             xmppClient.incomingMessages.collect { msg ->
-                // Ignorar recibos, presencias, etc.
-                if (msg.isReceipt || msg.isPresence || msg.isDeliveryAck) {
-                    // Procesar confirmaciones
-                    if (msg.receiptMsgId != null) {
-                        messageDao.markAsDelivered(msg.receiptMsgId)
-                    }
-                    return@collect
-                }
-
                 val sender = msg.from.split("@")[0]
                 if (sender == chatJid || msg.from == chatJid) {
-                    val entity = MessageEntity(
-                        id = msg.id, chatJid = chatJid, senderPhone = sender,
-                        body = msg.body, type = msg.type, state = "received",
-                        timestamp = msg.timestamp
-                    )
+                    val entity = MessageEntity(id = msg.id, chatJid = chatJid, senderPhone = sender,
+                        body = msg.body, type = "text", state = "received", timestamp = msg.timestamp)
                     messageDao.insert(entity)
                     chatDao.updateLastMessage(chatJid, msg.body, msg.timestamp)
                     chatDao.incrementUnread(chatJid)
