@@ -13,7 +13,7 @@ import cu.todus.app.data.local.entity.MessageEntity
 
 @Database(
     entities = [MessageEntity::class, ChatEntity::class, ContactEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class ToDusDatabase : RoomDatabase() {
@@ -22,13 +22,20 @@ abstract class ToDusDatabase : RoomDatabase() {
     abstract fun contactDao(): ContactDao
 
     companion object {
-        @Volatile private var INSTANCE: ToDusDatabase? = null
+        @Volatile
+        private var INSTANCE: ToDusDatabase? = null
+
         fun getInstance(context: Context): ToDusDatabase {
             return INSTANCE ?: synchronized(this) {
-                Room.databaseBuilder(context.applicationContext, ToDusDatabase::class.java, "todus_db")
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    ToDusDatabase::class.java,
+                    "todus_database"
+                )
                     .fallbackToDestructiveMigration()
                     .build()
-                    .also { INSTANCE = it }
+                INSTANCE = instance
+                instance
             }
         }
     }

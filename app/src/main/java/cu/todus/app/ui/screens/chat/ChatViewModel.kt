@@ -22,7 +22,6 @@ class ChatViewModel(
     val messageText: StateFlow<String> = _messageText
     private val _isLoadingOffline = MutableStateFlow(false)
     val isLoadingOffline: StateFlow<Boolean> = _isLoadingOffline
-    private var lastSeen by mutableStateOf("")
 
     init { loadMessages(); observeIncoming(); requestOffline() }
 
@@ -33,10 +32,25 @@ class ChatViewModel(
     private fun observeIncoming() {
         viewModelScope.launch {
             xmppClient.incomingMessages.collect { msg ->
-                if (msg.from.split("@")[0] == chatJid || msg.from == chatJid) {
-                    messageDao.insert(MessageEntity(id = msg.id, chatJid = chatJid, senderPhone = msg.from.split("@")[0], body = msg.body, type = "text", state = "received", timestamp = msg.timestamp))
+                // Ignorar recibos, presencias, etc.
+                if (msg.isReceipt || msg.isPresence || msg.isDeliveryAck) {
+                    // Procesar confirmaciones
+                    if (msg.receiptMsgId != null) {
+                        messageDao.markAsDelivered(msg.receiptMsgId)
+                    }
+                    return@collect
+                }
+
+                val sender = msg.from.split("@")[0]
+                if (sender == chatJid || msg.from == chatJid) {
+                    val entity = MessageEntity(
+                        id = msg.id, chatJid = chatJid, senderPhone = sender,
+                        body = msg.body, type = msg.type, state = "received",
+                        timestamp = msg.timestamp
+                    )
+                    messageDao.insert(entity)
                     chatDao.updateLastMessage(chatJid, msg.body, msg.timestamp)
-                    chatDao.clearUnread(chatJid)
+                    chatDao.incrementUnread(chatJid)
                 }
             }
         }
@@ -45,7 +59,7 @@ class ChatViewModel(
     private fun requestOffline() {
         viewModelScope.launch {
             _isLoadingOffline.value = true
-            xmppClient.sendIq(ToDusProtocol.buildOfflineIq())
+            xmppClient.requestOfflineMessages()
             _isLoadingOffline.value = false
         }
     }
@@ -60,12 +74,6 @@ class ChatViewModel(
             val msgId = xmppClient.sendMessage(chatJid, text)
             messageDao.insert(MessageEntity(id = msgId, chatJid = chatJid, senderPhone = "me", body = text, type = "text", state = "sent", timestamp = System.currentTimeMillis()))
             chatDao.updateLastMessage(chatJid, text, System.currentTimeMillis())
-        }
-    }
-
-    fun requestLastSeen() {
-        viewModelScope.launch {
-            xmppClient.sendIq(ToDusProtocol.buildLastIq(chatJid))
         }
     }
 }

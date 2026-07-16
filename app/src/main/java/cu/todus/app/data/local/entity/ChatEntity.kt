@@ -5,10 +5,12 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "chats")
 data class ChatEntity(
-    @PrimaryKey val jid: String,
+    @PrimaryKey
+    val jid: String,
     val name: String,
     val lastMessage: String = "",
-    val lastTimestamp: Long = 0,
+    val lastTimestamp: Long = 0L,
     val unreadCount: Int = 0,
-    val avatarUrl: String = ""
+    val avatarUrl: String = "",
+    val isGroup: Boolean = false
 )

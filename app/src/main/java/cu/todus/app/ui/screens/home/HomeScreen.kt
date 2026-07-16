@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.JwtManager
 import cu.todus.app.data.local.ToDusDatabase
+import cu.todus.app.data.remote.ConnectionState
 import cu.todus.app.ui.components.ChatListItem
 import cu.todus.app.ui.components.HomeTopBar
 import cu.todus.app.ui.theme.ToDusColors
@@ -35,7 +36,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onP
         topBar = { HomeTopBar(connectionState, userName, userAvatar, onProfileClick) },
         floatingActionButton = {
             ExtendedFloatingActionButton(onClick = onNewChat, containerColor = ToDusColors.Red, contentColor = ToDusColors.White, shape = RoundedCornerShape(16.dp)) {
-                Icon(Icons.Outlined.ChatBubbleOutline, "Nuevo Chat", modifier = Modifier.size(20.dp)); Spacer(modifier = Modifier.width(8.dp)); Text("Nuevo Chat", style = MaterialTheme.typography.titleMedium)
+                Icon(Icons.Outlined.ChatBubbleOutline, "Nuevo Chat", modifier = Modifier.size(20.dp)); Spacer(modifier = Modifier.width(8.dp)); Text("Nuevo Chat")
             }
         }
     ) { padding ->

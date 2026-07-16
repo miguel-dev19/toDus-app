@@ -1,7 +1,6 @@
 package cu.todus.app.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,14 +21,14 @@ import cu.todus.app.ui.theme.ToDusColors
 @Composable
 fun HomeTopBar(connectionState: ConnectionState, userName: String, userAvatar: String? = null, onProfileClick: () -> Unit) {
     val indicatorColor = when (connectionState) {
-        ConnectionState.CONNECTED, ConnectionState.AUTHENTICATED -> ToDusColors.Green
-        ConnectionState.CONNECTING, ConnectionState.RECONNECTING, ConnectionState.BEFORE_CONNECTED -> ToDusColors.Orange
-        ConnectionState.WAITING_FOR_CONNECTION -> ToDusColors.Gray
-        ConnectionState.DISCONNECTED -> ToDusColors.Error
+        ConnectionState.CONNECTED -> ToDusColors.Green
+        ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> ToDusColors.Orange
+        ConnectionState.DISCONNECTED, ConnectionState.FAILED -> ToDusColors.Error
     }
+    
     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
         Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(start = 16.dp, end = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("toDus", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text("toDus", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             Surface(onClick = onProfileClick, shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
                 Row(modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(userName, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 100.dp))
