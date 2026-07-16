@@ -38,9 +38,7 @@ fun NavGraph(navController: NavHostController = rememberNavController(), startDe
         composable(Screen.PhoneInput.route) {
             PhoneInputScreen(
                 onBack = { navController.popBackStack() },
-                onContinue = { phone, jwt ->
-                    navController.navigate(Screen.Home.route) { popUpTo(0) }
-                }
+                onContinue = { _, _ -> navController.navigate(Screen.Home.route) { popUpTo(0) } }
             )
         }
         composable(Screen.Home.route) {
@@ -59,9 +57,7 @@ fun NavGraph(navController: NavHostController = rememberNavController(), startDe
         composable(Screen.Contacts.route) {
             ContactsScreen(
                 onBack = { navController.popBackStack() },
-                onContactClick = { jid, name ->
-                    navController.navigate(Screen.ContactProfile.createRoute(jid))
-                }
+                onContactClick = { phone, _ -> navController.navigate(Screen.ContactProfile.createRoute(phone)) }
             )
         }
         composable(
@@ -77,19 +73,11 @@ fun NavGraph(navController: NavHostController = rememberNavController(), startDe
         }
         composable(
             route = Screen.Chat.route,
-            arguments = listOf(
-                navArgument("jid") { type = NavType.StringType },
-                navArgument("name") { type = NavType.StringType }
-            )
+            arguments = listOf(navArgument("jid") { type = NavType.StringType }, navArgument("name") { type = NavType.StringType })
         ) { backStackEntry ->
             val jid = backStackEntry.arguments?.getString("jid") ?: ""
             val name = backStackEntry.arguments?.getString("name") ?: ""
-            ChatScreen(
-                chatJid = jid,
-                chatName = name,
-                onBack = { navController.popBackStack() },
-                onContactProfile = { phone -> navController.navigate(Screen.ContactProfile.createRoute(phone)) }
-            )
+            ChatScreen(chatJid = jid, chatName = name, onBack = { navController.popBackStack() }, onContactProfile = { phone -> navController.navigate(Screen.ContactProfile.createRoute(phone)) })
         }
     }
 }
