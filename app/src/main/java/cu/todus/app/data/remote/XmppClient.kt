@@ -26,6 +26,7 @@ class XmppClient(private val context: Context? = null) {
     private var running = false
     private var readerJob: Job? = null
     private var reconnectJob: Job? = null
+    private var networkObserverJob: Job? = null
     private var reconnectAttempts = 0
     
     private var lastIqResponse = ""
@@ -54,7 +55,9 @@ class XmppClient(private val context: Context? = null) {
             toDusConnection.handshake(phone, jwt).onSuccess {
                 _connectionState.value = ConnectionState.CONNECTED
                 running = true; reconnectAttempts = 0
-                startMessageReader(); startReconnectWatcher()
+                startMessageReader()
+                startReconnectWatcher()
+                startNetworkObserver()
             }.onFailure { _connectionState.value = ConnectionState.FAILED }
             Result.success(Unit)
         } catch (e: Exception) { _connectionState.value = ConnectionState.FAILED; Result.failure(e) }
@@ -76,6 +79,7 @@ class XmppClient(private val context: Context? = null) {
     fun requestRoster() = sendIq(ToDusProtocol.buildRosterListIq())
 
     private fun startMessageReader() {
+        readerJob?.cancel()
         readerJob = CoroutineScope(Dispatchers.IO).launch {
             while (running) {
                 try {
@@ -90,7 +94,6 @@ class XmppClient(private val context: Context? = null) {
     private fun processIncomingData(data: String) {
         data.split(Regex("(?<=>)(?=<)")).forEach { stanza ->
             if (stanza.isBlank()) return@forEach
-            
             if (stanza.contains("<iq ") && (
                 stanza.contains("todus:users:getinfo") || stanza.contains("todus:roster:list") ||
                 stanza.contains("t:offline") || stanza.contains("todus:block:get") ||
@@ -98,7 +101,6 @@ class XmppClient(private val context: Context? = null) {
             )) {
                 lastIqResponse = stanza; lastIqTime = System.currentTimeMillis()
             }
-            
             when {
                 ToDusProtocol.isMessage(stanza) -> {
                     val msg = ToDusProtocol.parseIncomingMessage(stanza)
@@ -122,22 +124,61 @@ class XmppClient(private val context: Context? = null) {
                 try { toDusConnection.sendRaw(" ") }
                 catch (_: Exception) {
                     if (running && phone.isNotEmpty() && jwt.isNotEmpty()) {
-                        reconnectAttempts++
-                        if (reconnectAttempts <= 10) {
-                            _connectionState.value = ConnectionState.RECONNECTING
-                            delay((2000L * (1L shl minOf(reconnectAttempts, 5))))
-                            try { toDusConnection.close(); connect(phone, jwt) }
-                            catch (_: Exception) { _connectionState.value = ConnectionState.DISCONNECTED }
-                        } else { _connectionState.value = ConnectionState.FAILED }
+                        attemptReconnect()
                     }
                 }
             }
         }
     }
 
+    private fun startNetworkObserver() {
+        networkObserverJob?.cancel()
+        networkObserverJob = CoroutineScope(Dispatchers.IO).launch {
+            networkMonitor?.state?.collect { netState ->
+                if (!netState.isAvailable && running) {
+                    // Red perdida
+                    _connectionState.value = ConnectionState.DISCONNECTED
+                } else if (netState.isAvailable && _connectionState.value == ConnectionState.DISCONNECTED && running) {
+                    // Red recuperada - reconectar
+                    delay(1000)
+                    attemptReconnect()
+                }
+            }
+        }
+    }
+
+    private suspend fun attemptReconnect() {
+        reconnectAttempts++
+        if (reconnectAttempts > 10) {
+            _connectionState.value = ConnectionState.FAILED
+            return
+        }
+        _connectionState.value = ConnectionState.RECONNECTING
+        val delay = (2000L * (1L shl minOf(reconnectAttempts, 5)))
+        delay(delay)
+        try {
+            toDusConnection.close()
+            toDusConnection.handshake(phone, jwt).onSuccess {
+                _connectionState.value = ConnectionState.CONNECTED
+                reconnectAttempts = 0
+                running = true
+                startMessageReader()
+            }.onFailure {
+                _connectionState.value = ConnectionState.DISCONNECTED
+            }
+        } catch (_: Exception) {
+            _connectionState.value = ConnectionState.DISCONNECTED
+        }
+    }
+
     fun disconnect() {
-        running = false; readerJob?.cancel(); reconnectJob?.cancel()
-        networkMonitor?.stop(); toDusConnection.close()
-        reconnectAttempts = 0; _connectionState.value = ConnectionState.DISCONNECTED
+        running = false
+        readerJob?.cancel()
+        reconnectJob?.cancel()
+        networkObserverJob?.cancel()
+        networkMonitor?.stop()
+        toDusConnection.close()
+        reconnectAttempts = 0
+        _connectionState.value = ConnectionState.DISCONNECTED
     }
 }
