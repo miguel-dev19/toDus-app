@@ -9,6 +9,8 @@ import cu.todus.app.data.local.dao.ChatDao
 import cu.todus.app.data.local.dao.MessageDao
 import cu.todus.app.data.local.entity.MessageEntity
 import cu.todus.app.data.remote.ToDusMessage
+import cu.todus.app.data.remote.XmppClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -26,11 +28,16 @@ class ChatViewModel(
     val isLoadingOffline: StateFlow<Boolean> = _isLoadingOffline
     var lastSeen by mutableStateOf("")
         private set
+    private var lastComposingSent = 0L
 
-    init { loadMessages(); observeIncoming(); requestOffline() }
+    init { loadMessages(); observeIncoming(); requestOffline(); clearUnread() }
 
     private fun loadMessages() {
         viewModelScope.launch { messageDao.getMessages(chatJid).collect { _messages.value = it } }
+    }
+
+    private fun clearUnread() {
+        viewModelScope.launch { chatDao.clearUnread(chatJid) }
     }
 
     private fun observeIncoming() {
@@ -68,13 +75,22 @@ class ChatViewModel(
         viewModelScope.launch { _isLoadingOffline.value = true; xmppClient.requestOfflineMessages(); delay(2000); _isLoadingOffline.value = false }
     }
 
-    fun onMessageTextChanged(text: String) { _messageText.value = text }
+    fun onMessageTextChanged(text: String) {
+        _messageText.value = text
+        // Enviar "escribiendo..." cada 5 segundos
+        val now = System.currentTimeMillis()
+        if (text.isNotEmpty() && now - lastComposingSent > 5000) {
+            lastComposingSent = now
+            viewModelScope.launch { xmppClient.sendComposing(chatJid) }
+        }
+    }
 
     fun sendMessage() {
         val text = _messageText.value.trim()
         if (text.isEmpty()) return
         viewModelScope.launch {
             _messageText.value = ""
+            xmppClient.sendComposingStopped(chatJid)
             val msgId = xmppClient.sendMessage(chatJid, text)
             messageDao.insert(MessageEntity(id = msgId, chatJid = chatJid, senderPhone = "me", body = text, type = "text", state = "sent", timestamp = System.currentTimeMillis()))
             chatDao.updateLastMessage(chatJid, text, System.currentTimeMillis())

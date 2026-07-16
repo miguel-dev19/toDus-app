@@ -1,15 +1,20 @@
 package cu.todus.app.ui.screens.home
 
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -20,6 +25,7 @@ import cu.todus.app.data.remote.ConnectionState
 import cu.todus.app.ui.components.ChatListItem
 import cu.todus.app.ui.components.HomeTopBar
 import cu.todus.app.ui.theme.ToDusColors
+import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -31,12 +37,26 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onP
     val connectionState by app.xmppClient.connectionState.collectAsState()
     val userName = remember { jwtManager.getAlias() ?: jwtManager.getPhone() ?: "Usuario" }
     val userAvatar = remember { jwtManager.getAvatar() }
+    val totalUnread = chats.sumOf { it.unreadCount }
 
     Scaffold(
         topBar = { HomeTopBar(connectionState, userName, userAvatar, onProfileClick) },
         floatingActionButton = {
-            ExtendedFloatingActionButton(onClick = onNewChat, containerColor = ToDusColors.Red, contentColor = ToDusColors.White, shape = RoundedCornerShape(16.dp)) {
-                Icon(Icons.Outlined.ChatBubbleOutline, "Nuevo Chat", modifier = Modifier.size(20.dp)); Spacer(modifier = Modifier.width(8.dp)); Text("Nuevo Chat")
+            ExtendedFloatingActionButton(
+                onClick = onNewChat,
+                containerColor = ToDusColors.Red,
+                contentColor = ToDusColors.White,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Outlined.ChatBubbleOutline, "Nuevo Chat", modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Nuevo Chat")
+                if (totalUnread > 0) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(modifier = Modifier.size(20.dp).clip(RoundedCornerShape(10.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+                        Text("$totalUnread", color = ToDusColors.Red, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     ) { padding ->
@@ -48,7 +68,35 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onP
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 80.dp)) {
                 items(chats, key = { it.jid }) { chat ->
                     val timeStr = if (chat.lastTimestamp > 0) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(chat.lastTimestamp)) else ""
-                    ChatListItem(name = chat.name.ifEmpty { chat.jid }, lastMessage = chat.lastMessage, time = timeStr, unreadCount = chat.unreadCount, avatarUrl = chat.avatarUrl.ifEmpty { null }, onClick = { onChatClick(chat.jid, chat.name.ifEmpty { chat.jid }) })
+                    val dismissState = rememberSwipeToDismissBoxState(
+                        confirmValueChange = { value ->
+                            if (value == SwipeToDismissBoxValue.EndToStart) {
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    db.chatDao().delete(chat)
+                                    db.chatDao().deleteMessages(chat.jid)
+                                }
+                                true
+                            } else false
+                        }
+                    )
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        backgroundContent = {
+                            Box(modifier = Modifier.fillMaxSize().background(ToDusColors.Error).padding(horizontal = 20.dp), contentAlignment = Alignment.CenterEnd) {
+                                Icon(Icons.Default.Delete, "Eliminar", tint = Color.White)
+                            }
+                        },
+                        enableDismissFromStartToEnd = false
+                    ) {
+                        ChatListItem(
+                            name = chat.name.ifEmpty { chat.jid },
+                            lastMessage = chat.lastMessage,
+                            time = timeStr,
+                            unreadCount = chat.unreadCount,
+                            avatarUrl = chat.avatarUrl.ifEmpty { null },
+                            onClick = { onChatClick(chat.jid, chat.name.ifEmpty { chat.jid }) }
+                        )
+                    }
                 }
             }
         }

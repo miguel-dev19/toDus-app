@@ -12,6 +12,9 @@ interface ChatDao {
     @Query("SELECT * FROM chats WHERE jid = :jid")
     suspend fun getChat(jid: String): ChatEntity?
 
+    @Query("SELECT COUNT(*) FROM chats")
+    suspend fun getChatCount(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(chat: ChatEntity)
 
@@ -29,4 +32,7 @@ interface ChatDao {
 
     @Delete
     suspend fun delete(chat: ChatEntity)
+
+    @Query("DELETE FROM messages WHERE chatJid = :jid")
+    suspend fun deleteMessages(jid: String)
 }

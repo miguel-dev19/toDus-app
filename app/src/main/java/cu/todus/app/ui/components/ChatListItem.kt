@@ -1,11 +1,12 @@
 package cu.todus.app.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -15,11 +16,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import cu.todus.app.ui.theme.ToDusColors
 
 @Composable
-fun ChatListItem(name: String, lastMessage: String, time: String, unreadCount: Int = 0, avatarUrl: String? = null, onClick: () -> Unit) {
+fun ChatListItem(name: String, lastMessage: String, time: String, unreadCount: Int = 0, avatarUrl: String? = null, onClick: () -> Unit, onDelete: () -> Unit = {}) {
+    var showDelete by remember { mutableStateOf(false) }
+    
     Surface(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(52.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
