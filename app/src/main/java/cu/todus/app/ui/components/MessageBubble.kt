@@ -3,6 +3,10 @@ package cu.todus.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,8 +34,13 @@ fun MessageBubble(text: String, time: Long, isMine: Boolean, state: String = "se
                 Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(time)), fontSize = 11.sp, color = if (isMine) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant)
                     if (isMine) {
-                        val checkColor = if (state == "read") ToDusColors.Green else Color.White.copy(alpha = 0.7f)
-                        Text(if (state == "read") "✓✓" else if (state == "delivered") "✓✓" else "✓", fontSize = 12.sp, color = checkColor)
+                        when (state) {
+                            "sending" -> Icon(Icons.Default.Schedule, "Enviando", modifier = Modifier.size(14.dp), tint = Color.White.copy(alpha = 0.7f))
+                            "sent" -> Icon(Icons.Default.Check, "Enviado", modifier = Modifier.size(14.dp), tint = Color.White.copy(alpha = 0.7f))
+                            "delivered" -> Icon(Icons.Default.DoneAll, "Entregado", modifier = Modifier.size(14.dp), tint = Color.White.copy(alpha = 0.7f))
+                            "read" -> Icon(Icons.Default.DoneAll, "Leído", modifier = Modifier.size(14.dp), tint = ToDusColors.Green)
+                            else -> Icon(Icons.Default.Check, "Enviado", modifier = Modifier.size(14.dp), tint = Color.White.copy(alpha = 0.7f))
+                        }
                     }
                 }
             }
