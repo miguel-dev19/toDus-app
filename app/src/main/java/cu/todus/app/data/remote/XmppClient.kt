@@ -31,9 +31,7 @@ class XmppClient(private val context: Context? = null) {
     private var lastIqResponse = ""
     private var lastIqTime = 0L
 
-    fun getLastIqResponse(): String {
-        return if (System.currentTimeMillis() - lastIqTime < 10000) lastIqResponse else ""
-    }
+    fun getLastIqResponse(): String = if (System.currentTimeMillis() - lastIqTime < 10000) lastIqResponse else ""
 
     suspend fun authenticate(phone: String): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -57,12 +55,6 @@ class XmppClient(private val context: Context? = null) {
                 _connectionState.value = ConnectionState.CONNECTED
                 running = true; reconnectAttempts = 0
                 startMessageReader(); startReconnectWatcher()
-                // Observar cambios de red
-                networkMonitor?.state?.collect { netState ->
-                    if (!netState.isAvailable && running) {
-                        _connectionState.value = ConnectionState.DISCONNECTED
-                    }
-                }
             }.onFailure { _connectionState.value = ConnectionState.FAILED }
             Result.success(Unit)
         } catch (e: Exception) { _connectionState.value = ConnectionState.FAILED; Result.failure(e) }
@@ -77,6 +69,8 @@ class XmppClient(private val context: Context? = null) {
     fun sendIq(xml: String) = toDusConnection.sendRaw(xml)
     fun sendReceivedReceipt(to: String, msgId: String) = toDusConnection.sendRaw(ToDusProtocol.buildReceivedReceipt(to, msgId))
     fun sendDeliveredReceipt(to: String, msgId: String) = toDusConnection.sendRaw(ToDusProtocol.buildDeliveredReceipt(to, msgId))
+    fun sendComposing(to: String) = toDusConnection.sendRaw(ToDusProtocol.buildComposing(to))
+    fun sendComposingStopped(to: String) = toDusConnection.sendRaw(ToDusProtocol.buildComposingStopped(to))
     fun requestOfflineMessages() = sendIq(ToDusProtocol.buildOfflineIq())
     fun requestUserInfo(phone: String) = sendIq(ToDusProtocol.buildGetUserInfoIq(phone))
     fun requestRoster() = sendIq(ToDusProtocol.buildRosterListIq())
@@ -98,30 +92,23 @@ class XmppClient(private val context: Context? = null) {
             if (stanza.isBlank()) return@forEach
             
             if (stanza.contains("<iq ") && (
-                stanza.contains("todus:users:getinfo") || 
-                stanza.contains("todus:roster:list") || 
-                stanza.contains("t:offline") ||
-                stanza.contains("todus:block:get") ||
-                stanza.contains("todus:privacy") ||
-                stanza.contains("todus:muclight:my_mucs")
+                stanza.contains("todus:users:getinfo") || stanza.contains("todus:roster:list") ||
+                stanza.contains("t:offline") || stanza.contains("todus:block:get") ||
+                stanza.contains("todus:privacy") || stanza.contains("todus:muclight:my_mucs")
             )) {
-                lastIqResponse = stanza
-                lastIqTime = System.currentTimeMillis()
+                lastIqResponse = stanza; lastIqTime = System.currentTimeMillis()
             }
             
             when {
                 ToDusProtocol.isMessage(stanza) -> {
                     val msg = ToDusProtocol.parseIncomingMessage(stanza)
-                    if (msg != null) {
-                        if (!msg.isReceipt && msg.from.isNotEmpty()) {
-                            val fromPhone = msg.from.split("@")[0]
-                            if (fromPhone != phone) sendReceivedReceipt(fromPhone, msg.id)
-                        }
-                        _incomingMessages.tryEmit(msg)
-                    }
+                    if (msg != null) _incomingMessages.tryEmit(msg)
                 }
                 stanza.contains("<query xmlns=\"t:offline\"") -> {
                     ToDusProtocol.parseOfflineMessages(stanza).forEach { _incomingMessages.tryEmit(it) }
+                }
+                stanza.contains("<p ") -> {
+                    _incomingMessages.tryEmit(ToDusMessage(id = "", from = "", to = "", body = "", rawXml = stanza, isPresence = true))
                 }
             }
         }
@@ -138,13 +125,10 @@ class XmppClient(private val context: Context? = null) {
                         reconnectAttempts++
                         if (reconnectAttempts <= 10) {
                             _connectionState.value = ConnectionState.RECONNECTING
-                            val delay = (2000L * (1L shl minOf(reconnectAttempts, 5)))
-                            delay(delay)
+                            delay((2000L * (1L shl minOf(reconnectAttempts, 5))))
                             try { toDusConnection.close(); connect(phone, jwt) }
                             catch (_: Exception) { _connectionState.value = ConnectionState.DISCONNECTED }
-                        } else {
-                            _connectionState.value = ConnectionState.FAILED
-                        }
+                        } else { _connectionState.value = ConnectionState.FAILED }
                     }
                 }
             }
@@ -152,11 +136,8 @@ class XmppClient(private val context: Context? = null) {
     }
 
     fun disconnect() {
-        running = false
-        readerJob?.cancel(); reconnectJob?.cancel()
-        networkMonitor?.stop()
-        toDusConnection.close()
-        reconnectAttempts = 0
-        _connectionState.value = ConnectionState.DISCONNECTED
+        running = false; readerJob?.cancel(); reconnectJob?.cancel()
+        networkMonitor?.stop(); toDusConnection.close()
+        reconnectAttempts = 0; _connectionState.value = ConnectionState.DISCONNECTED
     }
 }

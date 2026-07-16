@@ -47,14 +47,18 @@ object ToDusProtocol {
         return "<m to=\"$to@$DOMAIN\" t=\"c\" i=\"$ackId\" xmlns=\"$MSG_NS\"><dd xmlns=\"$BODY_K_NS\" i=\"$originalMsgId\"/></m>"
     }
     
+    fun buildComposing(to: String): String =
+        "<m to=\"$to@$DOMAIN\" t=\"c\" i=\"${randomHex(16)}\" xmlns=\"$MSG_NS\"><csp xmlns=\"uc1\"/></m>"
+    
+    fun buildComposingStopped(to: String): String =
+        "<m to=\"$to@$DOMAIN\" t=\"c\" i=\"${randomHex(16)}\" xmlns=\"$MSG_NS\"><csc xmlns=\"uc1\"/></m>"
+    
     fun buildOfflineIq(): String = "<iq type=\"get\" id=\"off_${randomHex(8)}\"><query xmlns=\"t:offline\"/></iq>"
     
     fun buildOfflineConfirmIq(messageIds: List<String>): String {
         val ids = messageIds.joinToString("") { "<id>$it</id>" }
         return "<iq type=\"set\" id=\"offdel_${randomHex(8)}\"><query xmlns=\"t:offline:del\">$ids</query></iq>"
     }
-    
-    // ═══════ NUEVOS QUERIES REALES ═══════
     
     fun buildGetUserInfoIq(phone: String): String =
         "<iq type=\"get\" id=\"prof_${randomHex(8)}\"><query xmlns=\"todus:users:getinfo\" users=\"$phone\"/></iq>"
@@ -68,19 +72,11 @@ object ToDusProtocol {
     fun buildBlockUserIq(phone: String): String =
         "<iq type=\"set\" id=\"blk_${randomHex(8)}\" to=\"$DOMAIN\"><query xmlns=\"todus:block:set\" jid=\"$phone@$DOMAIN\"/></iq>"
     
-    fun buildPrivacyQueryIq(): String =
-        "<iq type=\"get\" id=\"priv_${randomHex(8)}\"><query xmlns=\"todus:privacy\"/></iq>"
-    
-    fun buildMyGroupsIq(): String =
-        "<iq type=\"get\" id=\"grp_${randomHex(8)}\" to=\"muclight.im.todus.cu\"><query xmlns=\"todus:muclight:my_mucs:2\" limit=\"100\" offset=\"0\"/></iq>"
-    
-    fun buildGroupInfoIq(groupJid: String): String =
-        "<iq type=\"get\" id=\"gi_${randomHex(8)}\" to=\"$groupJid\"><query xmlns=\"td:g:info_by_id\"/></iq>"
+    fun buildRosterDeleteIq(phone: String): String =
+        "<iq type=\"set\" id=\"del_${randomHex(8)}\"><query xmlns=\"todus:roster:delete\" jid=\"$phone@$DOMAIN\"/></iq>"
     
     fun buildS3UploadIq(fileType: Int, size: Long): String =
         "<iq type=\"get\" id=\"s3_${randomHex(8)}\"><query xmlns=\"todus:purl\" type=\"$fileType\" persistent=\"true\" size=\"$size\" room=\"\"/></iq>"
-    
-    // ═══════ PARSERS ═══════
     
     fun parseIncomingMessage(xml: String): ToDusMessage? {
         return try {
@@ -93,7 +89,7 @@ object ToDusProtocol {
             val receiptMsgId = if (isReceipt) extractReceiptMsgId(xml) else null
             ToDusMessage(id = id, from = from, to = to, body = body, type = type, rawXml = xml,
                 isReceipt = isReceipt, receiptMsgId = receiptMsgId,
-                isComposing = xml.contains("<csp "),
+                isComposing = xml.contains("<csp ") || xml.contains("<csc "),
                 isPresence = xml.contains("<p "),
                 isDeliveryAck = xml.contains("<tdack "))
         } catch (e: Exception) { null }
@@ -112,14 +108,9 @@ object ToDusProtocol {
     
     fun parseRosterContacts(xml: String): List<Pair<String, String>> {
         val contacts = mutableListOf<Pair<String, String>>()
-        val regex = Regex("""<contact alias='([^']*)' phone='([^']*)'""")
-        regex.findAll(xml).forEach { match ->
-            val alias = match.groupValues[1]
-            val phone = match.groupValues[2]
-            // Solo incluir contactos con número real (ignorar *123, 53*2266, etc.)
-            if (phone.matches(Regex("^\\d{8,}$"))) {
-                contacts.add(phone to alias)
-            }
+        Regex("""<contact alias='([^']*)' phone='([^']*)'""").findAll(xml).forEach { match ->
+            val alias = match.groupValues[1]; val phone = match.groupValues[2]
+            if (phone.matches(Regex("^\\d{8,}$"))) contacts.add(phone to alias)
         }
         return contacts
     }
@@ -139,16 +130,3 @@ object ToDusProtocol {
     private fun escapeXml(text: String): String = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
     private fun unescapeXml(text: String): String = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'")
 }
-
-    // ═══════ ROSTER OPERATIONS ═══════
-    fun buildRosterDeleteIq(phone: String): String =
-        "<iq type=\"set\" id=\"del_\${randomHex(8)}\"><query xmlns=\"todus:roster:delete\" jid=\"$phone@$DOMAIN\"/></iq>"
-    
-    fun buildRosterUpdateIq(phone: String, aliasBase64: String): String =
-        "<iq type=\"set\" id=\"upd_\${randomHex(8)}\"><query xmlns=\"todus:roster:update\" jid=\"$phone@$DOMAIN\" name=\"$aliasBase64\" subscription=\"both\"/></iq>"
-    
-    fun buildRosterHashIq(): String =
-        "<iq type=\"get\" id=\"rhash_\${randomHex(8)}\"><query xmlns=\"todus:roster:hash\"/></iq>"
-    
-    fun buildRosterVersionIq(): String =
-        "<iq type=\"get\" id=\"rver_\${randomHex(8)}\"><query xmlns=\"todus:users:getrosterversion\"/></iq>"
