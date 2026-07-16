@@ -65,7 +65,7 @@ fun WelcomeScreen(onContinue: () -> Unit) {
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        "Mensajería instantánea\nsimple, rápida y segura",
+                        "Una aplicación de mensajería\npensada para ti.",
                         fontSize = 16.sp,
                         color = Color.White.copy(alpha = 0.8f),
                         textAlign = TextAlign.Center,
