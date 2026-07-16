@@ -1,11 +1,13 @@
 # Registro de Cambios
 
-## v0.6.29 - 16/07/2026
+## v0.6.30 - 16/07/2026
 
 ### Correcciones
 - Arreglar carga de perfil y contactos: procesar respuestas IQ del servidor
 
 ### Otros Cambios
+- Actualizar slogan: Una aplicación de mensajería pensada para ti
+- Actualizar changelog y version
 - Logo toDus oficial en WelcomeScreen + Vector drawable
 - Actualizar changelog y version
 - UI Telegram completa: Welcome, PhoneInput, Chat, MessageBubble, ChatListItem rediseñados
