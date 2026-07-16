@@ -22,19 +22,17 @@ class XmppClient {
     private var readerJob: Job? = null
     private var reconnectJob: Job? = null
 
-    fun randomHexId(len: Int = 16): String = (1..len).map { "abcdef0123456789".random() }.joinToString("")
-
     suspend fun authenticate(phone: String): Result<String> = withContext(Dispatchers.IO) {
         try {
             val uuid = UUID.randomUUID().toString().replace("-", "")
-            val phoneBytes = phone.toByteArray()
-            val secretBytes = uuid.toByteArray().sliceArray(0..31)
-            val body = byteArrayOf(0x0a, phoneBytes.size.toByte()) + phoneBytes + byteArrayOf(0x12, 32) + secretBytes
-            val request = Request.Builder().url("https://auth.todus.cu/v2/auth/token")
+            val pb = phone.toByteArray(); val sb = uuid.toByteArray().sliceArray(0..31)
+            val body = byteArrayOf(0x0a, pb.size.toByte()) + pb + byteArrayOf(0x12, 32) + sb
+            val req = Request.Builder().url("https://auth.todus.cu/v2/auth/token")
                 .header("Content-Type", "application/x-protobuf").header("User-Agent", "ToDus 2.1.2 Auth")
                 .post(body.toRequestBody("application/x-protobuf".toMediaType())).build()
-            val response = okHttpClient.newCall(request).execute()
-            Result.success(response.body?.string() ?: "")
+            val resp = okHttpClient.newCall(req).execute()
+            val jwt = Regex("""eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+""").find(resp.body?.string() ?: "")?.value
+            if (jwt != null) Result.success(jwt) else Result.failure(Exception("JWT not found"))
         } catch (e: Exception) { Result.failure(e) }
     }
 
@@ -42,56 +40,55 @@ class XmppClient {
         try {
             this@XmppClient.phone = phone; this@XmppClient.jwt = jwt
             _connectionState.value = ConnectionState.CONNECTING
-            val result = toDusConnection.handshake(phone, jwt)
-            result.onSuccess {
-                _connectionState.value = ConnectionState.CONNECTED
-                running = true
-                startMessageReader()
-                startReconnectWatcher()
+            toDusConnection.handshake(phone, jwt).onSuccess {
+                _connectionState.value = ConnectionState.CONNECTED; running = true
+                startMessageReader(); startReconnectWatcher()
             }.onFailure { _connectionState.value = ConnectionState.FAILED }
-            result.map { Unit }
-        } catch (e: Exception) {
-            _connectionState.value = ConnectionState.FAILED
-            Result.failure(e)
-        }
+            Result.success(Unit)
+        } catch (e: Exception) { _connectionState.value = ConnectionState.FAILED; Result.failure(e) }
     }
 
     fun sendMessage(to: String, text: String): String {
         val msgId = ToDusProtocol.randomHex(16)
-        val xml = ToDusProtocol.buildOutgoingMessage(to, text, msgId)
-        toDusConnection.sendRaw(xml)
+        toDusConnection.sendRaw(ToDusProtocol.buildOutgoingMessage(to, text, msgId))
         return msgId
     }
 
-    fun sendIq(xml: String) { toDusConnection.sendRaw(xml) }
+    fun sendIq(xml: String) = toDusConnection.sendRaw(xml)
+    fun sendReceivedReceipt(to: String, msgId: String) = toDusConnection.sendRaw(ToDusProtocol.buildReceivedReceipt(to, msgId))
+    fun sendDeliveredReceipt(to: String, msgId: String) = toDusConnection.sendRaw(ToDusProtocol.buildDeliveredReceipt(to, msgId))
+    fun requestOfflineMessages() = sendIq(ToDusProtocol.buildOfflineIq())
 
     private fun startMessageReader() {
         readerJob = CoroutineScope(Dispatchers.IO).launch {
             while (running) {
                 try {
                     val data = toDusConnection.readRaw()
-                    if (!data.isNullOrBlank()) {
-                        // Parsear mensajes normales
-                        val msgs = data.split(Regex("(?<=>)(?=<)"))
-                        for (stanza in msgs) {
-                            if (stanza.isBlank()) continue
-                            
-                            // Intentar parsear como mensaje
-                            val msg = ToDusProtocol.parseIncomingMessage(stanza)
-                            if (msg != null) {
-                                _incomingMessages.tryEmit(msg)
-                            }
-                            
-                            // Parsear mensajes offline
-                            if (stanza.contains("<query xmlns=\"t:offline\"")) {
-                                ToDusProtocol.parseOfflineMessages(stanza).forEach {
-                                    _incomingMessages.tryEmit(it)
-                                }
-                            }
-                        }
-                    }
+                    if (!data.isNullOrBlank()) processIncomingData(data)
                 } catch (_: Exception) {}
                 delay(100)
+            }
+        }
+    }
+
+    private fun processIncomingData(data: String) {
+        data.split(Regex("(?<=>)(?=<)")).forEach { stanza ->
+            if (stanza.isBlank()) return@forEach
+            when {
+                ToDusProtocol.isMessage(stanza) -> {
+                    val msg = ToDusProtocol.parseIncomingMessage(stanza)
+                    if (msg != null) {
+                        // Auto-enviar RD
+                        if (!msg.isReceipt && msg.from.isNotEmpty()) {
+                            val fromPhone = msg.from.split("@")[0]
+                            if (fromPhone != phone) sendReceivedReceipt(fromPhone, msg.id)
+                        }
+                        _incomingMessages.tryEmit(msg)
+                    }
+                }
+                stanza.contains("<query xmlns=\"t:offline\"") -> {
+                    ToDusProtocol.parseOfflineMessages(stanza).forEach { _incomingMessages.tryEmit(it) }
+                }
             }
         }
     }
@@ -101,15 +98,12 @@ class XmppClient {
         reconnectJob = CoroutineScope(Dispatchers.IO).launch {
             while (running) {
                 delay(3000)
-                try {
-                    toDusConnection.sendRaw(" ")
-                } catch (_: Exception) {
+                try { toDusConnection.sendRaw(" ") }
+                catch (_: Exception) {
                     if (running && phone.isNotEmpty() && jwt.isNotEmpty()) {
                         _connectionState.value = ConnectionState.RECONNECTING
-                        try {
-                            toDusConnection.close()
-                            connect(phone, jwt)
-                        } catch (_: Exception) { _connectionState.value = ConnectionState.DISCONNECTED }
+                        try { toDusConnection.close(); connect(phone, jwt) }
+                        catch (_: Exception) { _connectionState.value = ConnectionState.DISCONNECTED }
                     }
                 }
             }
@@ -117,10 +111,7 @@ class XmppClient {
     }
 
     fun disconnect() {
-        running = false
-        readerJob?.cancel()
-        reconnectJob?.cancel()
-        toDusConnection.close()
-        _connectionState.value = ConnectionState.DISCONNECTED
+        running = false; readerJob?.cancel(); reconnectJob?.cancel()
+        toDusConnection.close(); _connectionState.value = ConnectionState.DISCONNECTED
     }
 }

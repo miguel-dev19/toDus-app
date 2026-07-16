@@ -5,123 +5,102 @@ import java.util.Base64
 object ToDusProtocol {
     const val STREAM_NS = "jc"
     const val STREAM_XMLNS = "x1"
-    const val SASL_NS = "x2"
+    const val SASL_NS = "urn:ietf:params:xml:ns:xmpp-sasl"
     const val BIND_NS = "urn:ietf:params:xml:ns:xmpp-bind"
-    const val SESSION_NS = "x5"
+    const val SESSION_NS = "urn:ietf:params:xml:ns:xmpp-session"
+    const val MSG_NS = "jc"
     const val BODY_K_NS = "x8"
-    const val COMPOSING_NS = "uc1"
-    const val ATTR_TO = "o"
-    const val ATTR_FROM = "f"
-    const val ATTR_ID = "i"
-    const val ATTR_TYPE = "t"
-    const val ATTR_MECHANISM = "e"
-    const val ELEM_MESSAGE = "m"
-    const val ELEM_BODY = "b"
-    const val ELEM_AUTH = "ah"
-    const val ELEM_SESSION = "s1"
-    const val ELEM_IQ = "iq"
-    const val ELEM_K = "k"
-    const val ELEM_RD = "rd"
-    const val ELEM_DD = "dd"
-    const val ELEM_CSP = "csp"
-    const val TYPE_SET = "set"
-    const val TYPE_GET = "get"
-    const val TYPE_CHAT = "c"
-    const val MECHANISM_PLAIN = "PLAIN"
+    const val DOMAIN = "im.todus.cu"
 
-    fun buildStreamOpen(domain: String = "im.todus.cu"): String {
-        return "<?xml version=\"1.0\"?><stream:stream $ATTR_TO=\"$domain\" xmlns=\"$STREAM_NS\" xmlns:stream=\"$STREAM_XMLNS\" v=\"1.0\">"
-    }
-
+    fun buildStreamOpen(): String = "<?xml version=\"1.0\"?><stream:stream to=\"$DOMAIN\" xmlns=\"$STREAM_NS\" xmlns:stream=\"$STREAM_XMLNS\" version=\"1.0\">"
+    
     fun buildAuthPacket(phone: String, jwt: String): String {
         val authBytes = "\u0000$phone\u0000$jwt".toByteArray()
-        val authBase64 = Base64.getEncoder().encodeToString(authBytes)
-        return "<$ELEM_AUTH xmlns=\"$SASL_NS\" $ATTR_MECHANISM=\"$MECHANISM_PLAIN\">$authBase64</$ELEM_AUTH>"
+        return "<auth xmlns=\"$SASL_NS\" mechanism=\"PLAIN\">${Base64.getEncoder().encodeToString(authBytes)}</auth>"
     }
-
-    fun isAuthSuccess(response: String): Boolean = response.contains("<ok") && response.contains(SASL_NS)
-
-    fun buildBindIq(resource: String = "ToDus"): String {
-        val iqId = "bind_${randomHex(8)}"
-        return "<$ELEM_IQ $ATTR_TYPE=\"$TYPE_SET\" $ATTR_ID=\"$iqId\"><bind xmlns=\"$BIND_NS\"><resource>$resource</resource></bind></$ELEM_IQ>"
+    
+    fun isAuthSuccess(response: String): Boolean = response.contains("<ok") || response.contains("<success")
+    fun isAuthFailure(response: String): Boolean = response.contains("<failure")
+    
+    fun buildBindIq(resource: String): String {
+        val iqId = randomHex(8)
+        return "<iq type=\"set\" id=\"$iqId\"><bind xmlns=\"$BIND_NS\"><resource>$resource</resource></bind></iq>"
     }
-
+    
     fun buildSessionIq(): String {
-        val iqId = "session_${randomHex(8)}"
-        return "<$ELEM_IQ $ATTR_TYPE=\"$TYPE_SET\" $ATTR_ID=\"$iqId\"><$ELEM_SESSION xmlns=\"$SESSION_NS\"/></$ELEM_IQ>"
+        val iqId = randomHex(8)
+        return "<iq type=\"set\" id=\"$iqId\"><session xmlns=\"$SESSION_NS\"/></iq>"
     }
-
+    
     fun buildPresence(): String = "<presence/>"
-
-    fun buildOutgoingMessage(to: String, body: String, msgId: String = randomHex(16)): String {
-        return "<$ELEM_MESSAGE $ATTR_TO=\"$to@im.todus.cu\" $ATTR_TYPE=\"$TYPE_CHAT\" $ATTR_ID=\"$msgId\" xmlns=\"$STREAM_NS\"><$ELEM_K xmlns=\"$BODY_K_NS\"/><$ELEM_BODY>${escapeXml(body)}</$ELEM_BODY></$ELEM_MESSAGE>"
+    
+    fun buildOutgoingMessage(to: String, body: String, msgId: String = randomHex(16)): String =
+        "<m to=\"$to@$DOMAIN\" t=\"c\" i=\"$msgId\" xmlns=\"$MSG_NS\"><k xmlns=\"$BODY_K_NS\"/><b>${escapeXml(body)}</b></m>"
+    
+    fun buildReceivedReceipt(to: String, originalMsgId: String): String {
+        val ackId = randomHex(16)
+        return "<m to=\"$to@$DOMAIN\" t=\"c\" i=\"$ackId\" xmlns=\"$MSG_NS\"><rd xmlns=\"$BODY_K_NS\" i=\"$originalMsgId\"/></m>"
     }
-
-    fun buildOfflineIq(): String = "<$ELEM_IQ $ATTR_TYPE=\"$TYPE_GET\" $ATTR_ID=\"off_${randomHex(8)}\"><query xmlns=\"t:offline\"/></$ELEM_IQ>"
-
-    fun buildGetUserInfoIq(phone: String): String = "<$ELEM_IQ $ATTR_TYPE=\"$TYPE_GET\" $ATTR_ID=\"prof_${randomHex(8)}\"><query xmlns=\"todus:users:getinfo\" users=\"$phone\"/></$ELEM_IQ>"
-
-    fun buildLastIq(phone: String): String = "<$ELEM_IQ $ATTR_TYPE=\"$TYPE_GET\" $ATTR_ID=\"last_${randomHex(8)}\" $ATTR_TO=\"$phone@im.todus.cu\"><query xmlns=\"todus:last:2\"/></$ELEM_IQ>"
-
+    
+    fun buildDeliveredReceipt(to: String, originalMsgId: String): String {
+        val ackId = randomHex(16)
+        return "<m to=\"$to@$DOMAIN\" t=\"c\" i=\"$ackId\" xmlns=\"$MSG_NS\"><dd xmlns=\"$BODY_K_NS\" i=\"$originalMsgId\"/></m>"
+    }
+    
+    fun buildOfflineIq(): String = "<iq type=\"get\" id=\"off_${randomHex(8)}\"><query xmlns=\"t:offline\"/></iq>"
+    
+    fun buildOfflineConfirmIq(messageIds: List<String>): String {
+        val ids = messageIds.joinToString("") { "<id>$it</id>" }
+        return "<iq type=\"set\" id=\"offdel_${randomHex(8)}\"><query xmlns=\"t:offline:del\">$ids</query></iq>"
+    }
+    
+    fun buildGetUserInfoIq(phone: String): String = "<iq type=\"get\" id=\"prof_${randomHex(8)}\"><query xmlns=\"todus:users:getinfo\" users=\"$phone\"/></iq>"
+    fun buildRosterListIq(): String = "<iq type=\"get\" id=\"rost_${randomHex(8)}\"><query xmlns=\"todus:roster:list:2\"/></iq>"
+    fun buildS3UploadIq(fileType: Int, size: Long): String = "<iq type=\"get\" id=\"s3_${randomHex(8)}\"><query xmlns=\"todus:purl\" type=\"$fileType\" persistent=\"true\" size=\"$size\" room=\"\"/></iq>"
+    fun buildPrivacyQueryIq(): String = "<iq type=\"get\" id=\"priv_${randomHex(8)}\"><query xmlns=\"todus:privacy\"/></iq>"
+    fun buildBlockUserIq(phone: String): String = "<iq type=\"set\" id=\"blk_${randomHex(8)}\" to=\"$DOMAIN\"><query xmlns=\"todus:block:set\" jid=\"$phone@$DOMAIN\"/></iq>"
+    
     fun parseIncomingMessage(xml: String): ToDusMessage? {
         return try {
-            val id = extractAttribute(xml, ATTR_ID) ?: return null
-            val from = extractAttribute(xml, ATTR_FROM) ?: ""
-            val to = extractAttribute(xml, ATTR_TO) ?: ""
+            val id = extractAttribute(xml, "i") ?: return null
+            val from = extractAttribute(xml, "f") ?: ""
+            val to = extractAttribute(xml, "o") ?: ""
+            val type = extractAttribute(xml, "t") ?: "c"
             val body = extractBody(xml) ?: ""
-            ToDusMessage(id = id, from = from, to = to, body = body, timestamp = System.currentTimeMillis(), rawXml = xml)
+            val isReceipt = xml.contains("<rd ") || xml.contains("<dd ")
+            val receiptMsgId = if (isReceipt) extractReceiptMsgId(xml) else null
+            ToDusMessage(id = id, from = from, to = to, body = body, type = type, rawXml = xml,
+                isReceipt = isReceipt, receiptMsgId = receiptMsgId,
+                isComposing = xml.contains("<csp "),
+                isPresence = xml.contains("<p "),
+                isDeliveryAck = xml.contains("<tdack "))
         } catch (e: Exception) { null }
     }
-
+    
     fun parseOfflineMessages(xml: String): List<ToDusMessage> {
         val messages = mutableListOf<ToDusMessage>()
-        val msgRegex = Regex("""<m\b.*?</m>""", RegexOption.DOT_MATCHES_ALL)
-        msgRegex.findAll(xml).forEach { match ->
+        Regex("""<m\b.*?</m>""", RegexOption.DOT_MATCHES_ALL).findAll(xml).forEach { match ->
             parseIncomingMessage(match.value)?.let { msg ->
-                val tsRegex = Regex("""<todus_offline ts='(\d+)'/>""")
-                val ts = tsRegex.find(match.value)?.groupValues?.get(1)?.toLongOrNull()
+                val ts = Regex("""<todus_offline ts='(\d+)'/>""").find(match.value)?.groupValues?.get(1)?.toLongOrNull()
                 messages.add(if (ts != null) msg.copy(timestamp = ts) else msg)
             }
         }
         return messages
     }
-
-    fun extractBody(xml: String): String? {
-        val regex = Regex("""<b[^>]*>(.*?)</b>""", RegexOption.DOT_MATCHES_ALL)
-        return regex.find(xml)?.groupValues?.get(1)?.let { unescapeXml(it) }
+    
+    fun extractBody(xml: String): String? = Regex("""<b[^>]*>(.*?)</b>""", RegexOption.DOT_MATCHES_ALL).find(xml)?.groupValues?.get(1)?.let { unescapeXml(it) }
+    fun extractAttribute(xml: String, attrName: String): String? = Regex("""$attrName\s*=\s*['"]([^'"]*)['"]""").find(xml)?.groupValues?.get(1)
+    fun extractBindJid(xml: String): String? = Regex("""<jid>(.*?)</jid>""").find(xml)?.groupValues?.get(1)
+    fun extractReceiptMsgId(xml: String): String? = Regex("""<rd[^>]*i=['"]([^'"]*)['"]""").find(xml)?.groupValues?.get(1) ?: Regex("""<dd[^>]*i=['"]([^'"]*)['"]""").find(xml)?.groupValues?.get(1)
+    fun extractDeliveryAckMsgId(xml: String): String? = Regex("""<tdack[^>]*mi=['"]([^'"]*)['"]""").find(xml)?.groupValues?.get(1)
+    fun isMessage(xml: String): Boolean = xml.contains("<m ")
+    fun isReceipt(xml: String): Boolean = xml.contains("<rd ") || xml.contains("<dd ")
+    
+    fun randomHex(length: Int): String {
+        val chars = "abcdef0123456789"
+        return (1..length).map { chars.random() }.joinToString("")
     }
-
-    fun extractAttribute(xml: String, attrName: String): String? {
-        val regex = Regex("""$attrName\s*=\s*['"]([^'"]*)['"]""")
-        return regex.find(xml)?.groupValues?.get(1)
-    }
-
-    fun extractBindJid(xml: String): String? {
-        val regex = Regex("""<jid>(.*?)</jid>""")
-        return regex.find(xml)?.groupValues?.get(1)
-    }
-
-    fun parseUserInfo(xml: String): Map<String, String> {
-        val info = mutableMapOf<String, String>()
-        val regex = Regex("""<user\b([^>]*)>""")
-        val match = regex.find(xml) ?: return info
-        val attrs = match.groupValues[1]
-        listOf("alias", "official", "description", "username", "pic_url", "exists", "todus_id").forEach { attr ->
-            Regex("""$attr='([^']*)'""").find(attrs)?.groupValues?.get(1)?.let { info[attr] = it }
-        }
-        return info
-    }
-
-    fun parseLastSeen(xml: String): Long? {
-        return Regex("""last='(-?\d+)'""").find(xml)?.groupValues?.get(1)?.toLongOrNull()
-    }
-
-    fun escapeXml(text: String): String = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    fun unescapeXml(text: String): String = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-    fun randomHex(length: Int): String = (1..length).map { "abcdef0123456789".random() }.joinToString("")
+    
+    private fun escapeXml(text: String): String = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
+    private fun unescapeXml(text: String): String = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'")
 }
-
-data class ToDusMessage(
-    val id: String, val from: String, val to: String = "", val body: String,
-    val timestamp: Long = System.currentTimeMillis(), val rawXml: String = ""
-)
