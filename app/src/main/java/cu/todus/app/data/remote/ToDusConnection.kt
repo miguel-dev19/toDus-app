@@ -9,6 +9,13 @@ import java.security.cert.X509Certificate
 import java.security.SecureRandom
 
 class ToDusConnection {
+    companion object {
+        const val HOST = "ws.todus.cu"
+        const val PORT = 1756
+        const val CONNECT_TIMEOUT = 10000
+        const val READ_TIMEOUT = 30000
+    }
+
     private var socket: SSLSocket? = null
     private var reader: BufferedReader? = null
     private var writer: BufferedWriter? = null
@@ -16,35 +23,29 @@ class ToDusConnection {
     suspend fun handshake(phone: String, jwt: String): Result<ToDusSession> = withContext(Dispatchers.IO) {
         try {
             socket = createSSLSocket()
-            socket?.connect(InetSocketAddress(ToDusProtocol.HOST, ToDusProtocol.PORT), ToDusProtocol.CONNECT_TIMEOUT)
-            socket?.soTimeout = ToDusProtocol.READ_TIMEOUT
+            socket?.connect(InetSocketAddress(HOST, PORT), CONNECT_TIMEOUT)
+            socket?.soTimeout = READ_TIMEOUT
             reader = BufferedReader(InputStreamReader(socket!!.inputStream))
             writer = BufferedWriter(OutputStreamWriter(socket!!.outputStream))
 
-            // 1. Stream
             send(ToDusProtocol.buildStreamOpen())
             readUntil { it.contains("stream:features") }
 
-            // 2. Auth
             send(ToDusProtocol.buildAuthPacket(phone, jwt))
             val authResp = readUntil { ToDusProtocol.isAuthSuccess(it) || ToDusProtocol.isAuthFailure(it) }
             if (!ToDusProtocol.isAuthSuccess(authResp)) { close(); return@withContext Result.failure(Exception("Auth failed")) }
 
-            // 3. Restart stream
             send(ToDusProtocol.buildStreamOpen())
             readUntil { it.contains("stream:features") }
 
-            // 4. Bind
             val resource = "ToDus_${phone.takeLast(4)}"
             send(ToDusProtocol.buildBindIq(resource))
             val bindResp = readUntil { it.contains("jid") || it.contains("error") }
             val jid = ToDusProtocol.extractBindJid(bindResp) ?: "$phone@${ToDusProtocol.DOMAIN}/$resource"
 
-            // 5. Session
             send(ToDusProtocol.buildSessionIq())
             readUntil { it.contains("result") || it.contains("error") }
 
-            // 6. Presence
             send(ToDusProtocol.buildPresence())
 
             Result.success(ToDusSession(socket!!, jid, reader!!, writer!!))
