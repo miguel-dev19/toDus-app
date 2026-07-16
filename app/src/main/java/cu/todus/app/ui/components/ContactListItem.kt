@@ -14,7 +14,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import cu.todus.app.ui.theme.ToDusColors
 
 @Composable
 fun ContactListItem(name: String, phone: String, avatarUrl: String? = null, isRegistered: Boolean = false, onClick: () -> Unit) {
@@ -25,11 +24,7 @@ fun ContactListItem(name: String, phone: String, avatarUrl: String? = null, isRe
                 else Text(name.first().uppercase(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(phone, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (isRegistered) { Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(ToDusColors.Green)) }
+            Text(name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
