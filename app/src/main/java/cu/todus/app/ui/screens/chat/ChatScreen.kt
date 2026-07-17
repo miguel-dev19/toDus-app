@@ -19,14 +19,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.ToDusDatabase
+import cu.todus.app.data.local.entity.MessageEntity
 import cu.todus.app.ui.components.MessageBubble
 import cu.todus.app.ui.theme.ToDusColors
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Composable
 fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactProfile: (String) -> Unit = {}) {
@@ -38,6 +42,21 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
     val listState = rememberLazyListState()
     var lastSeen by remember { mutableStateOf("") }
     LaunchedEffect(messages.size) { if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
+
+    // Agrupar mensajes por fecha
+    val groupedMessages = remember(messages) {
+        val grouped = mutableListOf<Any>()
+        var lastDate = ""
+        for (msg in messages) {
+            val msgDate = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")).format(Date(msg.timestamp))
+            if (msgDate != lastDate) {
+                grouped.add(msgDate)
+                lastDate = msgDate
+            }
+            grouped.add(msg)
+        }
+        grouped
+    }
 
     Scaffold(
         topBar = {
@@ -85,7 +104,35 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                 }
             } else {
                 LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
-                    items(messages, key = { it.id }) { msg -> MessageBubble(text = msg.body, time = msg.timestamp, isMine = msg.senderPhone == "me", state = msg.state) }
+                    items(groupedMessages) { item ->
+                        when (item) {
+                            is String -> {
+                                // Separador de fecha
+                                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                    ) {
+                                        Text(
+                                            text = item,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                            is MessageEntity -> {
+                                MessageBubble(
+                                    text = item.body,
+                                    time = item.timestamp,
+                                    isMine = item.senderPhone == "me",
+                                    state = item.state
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
