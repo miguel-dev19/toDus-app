@@ -1,6 +1,7 @@
 package cu.todus.app.data.remote
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import okhttp3.*
@@ -54,22 +55,34 @@ class XmppClient(private val context: Context? = null) {
             _connectionState.value = ConnectionState.CONNECTING
             toDusConnection.handshake(phone, jwt).onSuccess {
                 _connectionState.value = ConnectionState.CONNECTED
+                Log.d("XmppClient", "✅ Conectado")
                 running = true; reconnectAttempts = 0
                 startMessageReader()
                 startReconnectWatcher()
                 startNetworkObserver()
-            }.onFailure { _connectionState.value = ConnectionState.FAILED }
+            }.onFailure { 
+                Log.e("XmppClient", "❌ Handshake falló: ${it.exceptionOrNull()?.message}")
+                _connectionState.value = ConnectionState.FAILED 
+            }
             Result.success(Unit)
-        } catch (e: Exception) { _connectionState.value = ConnectionState.FAILED; Result.failure(e) }
+        } catch (e: Exception) { 
+            Log.e("XmppClient", "❌ Error: ${e.message}")
+            _connectionState.value = ConnectionState.FAILED; Result.failure(e) 
+        }
     }
 
     fun sendMessage(to: String, text: String): String {
         val msgId = ToDusProtocol.randomHex(16)
         toDusConnection.sendRaw(ToDusProtocol.buildOutgoingMessage(to, text, msgId))
+        Log.d("XmppClient", "📤 Enviado: $msgId")
         return msgId
     }
 
-    fun sendIq(xml: String) = toDusConnection.sendRaw(xml)
+    fun sendIq(xml: String) {
+        toDusConnection.sendRaw(xml)
+        Log.d("XmppClient", "📤 IQ: ${xml.take(80)}...")
+    }
+    
     fun sendReceivedReceipt(to: String, msgId: String) = toDusConnection.sendRaw(ToDusProtocol.buildReceivedReceipt(to, msgId))
     fun sendDeliveredReceipt(to: String, msgId: String) = toDusConnection.sendRaw(ToDusProtocol.buildDeliveredReceipt(to, msgId))
     fun sendComposing(to: String) = toDusConnection.sendRaw(ToDusProtocol.buildComposing(to))
@@ -81,11 +94,17 @@ class XmppClient(private val context: Context? = null) {
     private fun startMessageReader() {
         readerJob?.cancel()
         readerJob = CoroutineScope(Dispatchers.IO).launch {
+            Log.d("XmppClient", "👂 Lector de mensajes iniciado")
             while (running) {
                 try {
                     val data = toDusConnection.readRaw()
-                    if (!data.isNullOrBlank()) processIncomingData(data)
-                } catch (_: Exception) {}
+                    if (!data.isNullOrBlank()) {
+                        Log.d("XmppClient", "📩 Recibido: ${data.take(100)}...")
+                        processIncomingData(data)
+                    }
+                } catch (e: Exception) {
+                    Log.e("XmppClient", "❌ Error lectura: ${e.message}")
+                }
                 delay(100)
             }
         }
@@ -94,22 +113,34 @@ class XmppClient(private val context: Context? = null) {
     private fun processIncomingData(data: String) {
         data.split(Regex("(?<=>)(?=<)")).forEach { stanza ->
             if (stanza.isBlank()) return@forEach
+            
+            // Guardar respuestas IQ
             if (stanza.contains("<iq ") && (
                 stanza.contains("todus:users:getinfo") || stanza.contains("todus:roster:list") ||
                 stanza.contains("t:offline") || stanza.contains("todus:block:get") ||
                 stanza.contains("todus:privacy") || stanza.contains("todus:muclight:my_mucs")
             )) {
                 lastIqResponse = stanza; lastIqTime = System.currentTimeMillis()
+                Log.d("XmppClient", "📩 IQ recibida: ${stanza.take(100)}...")
             }
+            
             when {
                 ToDusProtocol.isMessage(stanza) -> {
                     val msg = ToDusProtocol.parseIncomingMessage(stanza)
-                    if (msg != null) _incomingMessages.tryEmit(msg)
+                    if (msg != null) {
+                        Log.d("XmppClient", "📩 Mensaje: ${msg.from} -> ${msg.body.take(30)}")
+                        _incomingMessages.tryEmit(msg)
+                    }
                 }
                 stanza.contains("<query xmlns=\"t:offline\"") -> {
-                    ToDusProtocol.parseOfflineMessages(stanza).forEach { _incomingMessages.tryEmit(it) }
+                    Log.d("XmppClient", "📩 Offline messages")
+                    ToDusProtocol.parseOfflineMessages(stanza).forEach { 
+                        Log.d("XmppClient", "📩 Offline: ${it.from} -> ${it.body.take(30)}")
+                        _incomingMessages.tryEmit(it) 
+                    }
                 }
                 stanza.contains("<p ") -> {
+                    Log.d("XmppClient", "📩 Presencia")
                     _incomingMessages.tryEmit(ToDusMessage(id = "", from = "", to = "", body = "", rawXml = stanza, isPresence = true))
                 }
             }
@@ -123,6 +154,7 @@ class XmppClient(private val context: Context? = null) {
                 delay(3000)
                 try { toDusConnection.sendRaw(" ") }
                 catch (_: Exception) {
+                    Log.e("XmppClient", "❌ Keepalive falló")
                     if (running && phone.isNotEmpty() && jwt.isNotEmpty()) {
                         attemptReconnect()
                     }
@@ -136,10 +168,10 @@ class XmppClient(private val context: Context? = null) {
         networkObserverJob = CoroutineScope(Dispatchers.IO).launch {
             networkMonitor?.state?.collect { netState ->
                 if (!netState.isAvailable && running) {
-                    // Red perdida
+                    Log.d("XmppClient", "📶 Red perdida")
                     _connectionState.value = ConnectionState.DISCONNECTED
                 } else if (netState.isAvailable && _connectionState.value == ConnectionState.DISCONNECTED && running) {
-                    // Red recuperada - reconectar
+                    Log.d("XmppClient", "📶 Red recuperada")
                     delay(1000)
                     attemptReconnect()
                 }
