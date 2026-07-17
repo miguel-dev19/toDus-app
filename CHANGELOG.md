@@ -1,15 +1,17 @@
 # Registro de Cambios
 
-## v0.6.35 - 17/07/2026
+## v0.6.36 - 17/07/2026
 
 ### Mejoras
 - Mejoras: sincronización chats, indicador escribiendo al enviar, eliminar chats con swipe, animaciones
 
 ### Correcciones
+- extractDeliveryAckMsgId import + @OptIn ExperimentalMaterial3Api en HomeScreen
 - Fix SQL: escapar 'exists' con @ColumnInfo y comillas dobles en ProfileDao
 - Arreglar carga de perfil y contactos: procesar respuestas IQ del servidor
 
 ### Otros Cambios
+- Actualizar changelog y version
 - Actualizar changelog y version
 - Separadores por fecha en chat: '16 de julio de 2026' entre días diferentes
 - NetworkMonitor integrado: detecta pérdida de red y reconecta automáticamente al recuperar
