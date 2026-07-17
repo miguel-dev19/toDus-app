@@ -67,11 +67,12 @@ object ToDusProtocol {
     fun buildRosterListIq(): String =
         "<iq t=\"get\" i=\"rost_${randomHex(8)}\"><query xmlns=\"todus:roster:list:2\"/></iq>"
     
+    // CORREGIDO: IQ usan to= (no o=)
     fun buildBlockListIq(): String =
-        "<iq t=\"get\" i=\"blk_${randomHex(8)}\" o=\"$DOMAIN\"><query xmlns=\"todus:block:get:2\"/></iq>"
+        "<iq t=\"get\" i=\"blk_${randomHex(8)}\" to=\"$DOMAIN\"><query xmlns=\"todus:block:get:2\"/></iq>"
     
     fun buildBlockUserIq(phone: String): String =
-        "<iq t=\"set\" i=\"blk_${randomHex(8)}\" o=\"$DOMAIN\"><query xmlns=\"todus:block:set\" jid=\"$phone@$DOMAIN\"/></iq>"
+        "<iq t=\"set\" i=\"blk_${randomHex(8)}\" to=\"$DOMAIN\"><query xmlns=\"todus:block:set\" jid=\"$phone@$DOMAIN\"/></iq>"
     
     fun buildRosterDeleteIq(phone: String): String =
         "<iq t=\"set\" i=\"del_${randomHex(8)}\"><query xmlns=\"todus:roster:delete\" jid=\"$phone@$DOMAIN\"/></iq>"
@@ -80,7 +81,7 @@ object ToDusProtocol {
         "<iq t=\"get\" i=\"s3_${randomHex(8)}\"><query xmlns=\"todus:purl\" type=\"$fileType\" persistent=\"true\" size=\"$size\" room=\"\"/></iq>"
     
     fun buildMyGroupsIq(): String =
-        "<iq t=\"get\" i=\"grp_${randomHex(8)}\" o=\"muclight.im.todus.cu\"><query xmlns=\"todus:muclight:my_mucs:2\" limit=\"100\" offset=\"0\"/></iq>"
+        "<iq t=\"get\" i=\"grp_${randomHex(8)}\" to=\"muclight.im.todus.cu\"><query xmlns=\"todus:muclight:my_mucs:2\" limit=\"100\" offset=\"0\"/></iq>"
     
     fun parseIncomingMessage(xml: String): ToDusMessage? {
         return try {
