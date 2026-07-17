@@ -5,7 +5,7 @@ import java.util.Base64
 object ToDusProtocol {
     const val STREAM_NS = "jc"
     const val STREAM_XMLNS = "x1"
-    const val SASL_NS = "x2"
+    const val SASL_NS = "urn:ietf:params:xml:ns:xmpp-sasl"  // ESTÁNDAR - el servidor responde <ok xmlns='x2'/>
     const val BIND_NS = "urn:ietf:params:xml:ns:xmpp-bind"
     const val SESSION_NS = "x5"
     const val SESSION_ELEM = "s1"
@@ -17,7 +17,7 @@ object ToDusProtocol {
     
     fun buildAuthPacket(phone: String, jwt: String): String {
         val authBytes = "\u0000$phone\u0000$jwt".toByteArray()
-        return "<auth xmlns=\"$SASL_NS\" e=\"PLAIN\">${Base64.getEncoder().encodeToString(authBytes)}</auth>"
+        return "<auth xmlns=\"$SASL_NS\" mechanism=\"PLAIN\">${Base64.getEncoder().encodeToString(authBytes)}</auth>"
     }
     
     fun isAuthSuccess(response: String): Boolean = response.contains("<ok") || response.contains("<success")
@@ -67,7 +67,6 @@ object ToDusProtocol {
     fun buildRosterListIq(): String =
         "<iq t=\"get\" i=\"rost_${randomHex(8)}\"><query xmlns=\"todus:roster:list:2\"/></iq>"
     
-    // CORREGIDO: IQ usan to= (no o=)
     fun buildBlockListIq(): String =
         "<iq t=\"get\" i=\"blk_${randomHex(8)}\" to=\"$DOMAIN\"><query xmlns=\"todus:block:get:2\"/></iq>"
     
