@@ -130,3 +130,5 @@ object ToDusProtocol {
     private fun escapeXml(text: String): String = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
     private fun unescapeXml(text: String): String = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'")
 }
+
+    fun extractDeliveryAckMsgId(xml: String): String? = Regex("""<tdack[^>]*mi=['"]([^'"]*)['"]""").find(xml)?.groupValues?.get(1)
