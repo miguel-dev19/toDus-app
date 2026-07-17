@@ -16,7 +16,7 @@ interface ProfileDao {
     fun getAllProfiles(): Flow<List<ProfileEntity>>
 
     @Query("SELECT * FROM profiles WHERE alias != '' ORDER BY alias ASC")
-    fun getAllProfilesOnce(): List<ProfileEntity>
+    suspend fun getAllProfilesOnce(): List<ProfileEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(profile: ProfileEntity)
@@ -24,12 +24,12 @@ interface ProfileDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(profiles: List<ProfileEntity>)
 
-    @Query("UPDATE profiles SET alias = :alias, description = :description, photoUrl = :photoUrl, photoThumbUrl = :photoThumbUrl, todusId = :todusId, official = :official, exists = :exists, lastUpdated = :lastUpdated WHERE phone = :phone")
+    @Query("UPDATE profiles SET alias = :alias, description = :description, photoUrl = :photoUrl, photoThumbUrl = :photoThumbUrl, todusId = :todusId, official = :official, \"exists\" = :exists, lastUpdated = :lastUpdated WHERE phone = :phone")
     suspend fun updateProfile(phone: String, alias: String, description: String, photoUrl: String, photoThumbUrl: String, todusId: String, official: Boolean, exists: Boolean, lastUpdated: Long = System.currentTimeMillis())
 
     @Delete
     suspend fun delete(profile: ProfileEntity)
 
     @Query("DELETE FROM profiles WHERE lastUpdated < :olderThan")
-    suspend fun deleteOldProfiles(olderThan: Long = System.currentTimeMillis() - 7 * 24 * 60 * 60 * 1000) // 7 días
+    suspend fun deleteOldProfiles(olderThan: Long = System.currentTimeMillis() - 7 * 24 * 60 * 60 * 1000)
 }
