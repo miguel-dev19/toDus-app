@@ -9,6 +9,7 @@ import cu.todus.app.data.local.dao.ChatDao
 import cu.todus.app.data.local.dao.MessageDao
 import cu.todus.app.data.local.entity.MessageEntity
 import cu.todus.app.data.remote.ToDusMessage
+import cu.todus.app.data.remote.ToDusProtocol
 import cu.todus.app.data.remote.XmppClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -58,7 +59,7 @@ class ChatViewModel(
             }
             msg.isPresence -> lastSeen = "en linea"
             msg.isDeliveryAck -> {
-                val ackId = cu.todus.app.data.remote.ToDusProtocol.extractDeliveryAckMsgId(msg.rawXml)
+                val ackId = ToDusProtocol.extractDeliveryAckMsgId(msg.rawXml)
                 if (ackId != null) messageDao.updateState(ackId, "delivered")
             }
             msg.body.isNotEmpty() -> {
@@ -77,7 +78,6 @@ class ChatViewModel(
 
     fun onMessageTextChanged(text: String) {
         _messageText.value = text
-        // Enviar "escribiendo..." cada 5 segundos
         val now = System.currentTimeMillis()
         if (text.isNotEmpty() && now - lastComposingSent > 5000) {
             lastComposingSent = now

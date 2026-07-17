@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -30,6 +31,7 @@ import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onProfileClick: () -> Unit = {}) {
     val context = LocalContext.current; val app = context.applicationContext as ToDusApp
@@ -41,7 +43,6 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onP
     val totalUnread = chats.sumOf { it.unreadCount }
     val scope = rememberCoroutineScope()
 
-    // Solo pedir perfil al servidor si NO se ha pedido antes
     LaunchedEffect(Unit) {
         if (!jwtManager.isProfileFetched()) {
             val phone = jwtManager.getPhone() ?: return@LaunchedEffect
