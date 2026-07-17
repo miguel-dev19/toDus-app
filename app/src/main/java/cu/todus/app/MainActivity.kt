@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import cu.todus.app.data.local.JwtManager
 import cu.todus.app.data.local.ToDusDatabase
+import cu.todus.app.data.local.entity.ChatEntity
 import cu.todus.app.data.remote.OfflineManager
 import cu.todus.app.ui.theme.ToDusTheme
 import cu.todus.app.ui.navigation.NavGraph
@@ -30,6 +31,18 @@ class MainActivity : ComponentActivity() {
         val app = application as ToDusApp
         val db = ToDusDatabase.getInstance(this)
         var startDestination = "welcome"
+
+        // Callback para crear chats automáticamente con mensajes offline
+        app.xmppClient.onOfflineMessage = { jid, name, message, timestamp ->
+            CoroutineScope(Dispatchers.IO).launch {
+                val existing = db.chatDao().getChat(jid)
+                if (existing == null) {
+                    db.chatDao().insert(ChatEntity(jid = jid, name = name, lastMessage = message, lastTimestamp = timestamp))
+                } else {
+                    db.chatDao().updateLastMessage(jid, message, timestamp)
+                }
+            }
+        }
 
         if (jwtManager.isJwtValid()) {
             startDestination = "home"

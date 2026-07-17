@@ -30,6 +30,7 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
     fun loadContacts() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // Cargar cache offline primero
                 val cached = db.contactDao().getAllContactsOnce().map {
                     ProfileManager.RosterContact(phone = it.phone, alias = it.alias.ifEmpty { it.name }, photoUrl = it.avatarUrl)
                 }
@@ -47,6 +48,7 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
         }
     }
 
+    // ARREGLO 2: Cargar contactos automáticamente al entrar
     LaunchedEffect(Unit) { loadContacts() }
 
     Scaffold(
