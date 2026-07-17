@@ -9,7 +9,6 @@ import cu.todus.app.data.local.dao.ChatDao
 import cu.todus.app.data.local.dao.MessageDao
 import cu.todus.app.data.local.entity.MessageEntity
 import cu.todus.app.data.remote.ToDusMessage
-import cu.todus.app.data.remote.ToDusProtocol
 import cu.todus.app.data.remote.XmppClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -58,9 +57,8 @@ class ChatViewModel(
                 messageDao.updateState(msg.receiptMsgId, if (msg.rawXml.contains("<dd ")) "read" else "delivered")
             }
             msg.isPresence -> lastSeen = "en linea"
-            msg.isDeliveryAck -> {
-                val ackId = ToDusProtocol.extractDeliveryAckMsgId(msg.rawXml)
-                if (ackId != null) messageDao.updateState(ackId, "delivered")
+            msg.isDeliveryAck && msg.receiptMsgId != null -> {
+                messageDao.updateState(msg.receiptMsgId, "delivered")
             }
             msg.body.isNotEmpty() -> {
                 messageDao.insert(MessageEntity(id = msg.id, chatJid = chatJid, senderPhone = sender,
