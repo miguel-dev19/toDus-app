@@ -1,11 +1,19 @@
 # Registro de Cambios
 
-## v0.6.42 - 19/07/2026
+## v0.6.43 - 19/07/2026
 
 ### Correcciones
+- Fix S3Uploader: manejar String? de extractAttribute con ?: ""
 - callback antes de collect, launch separado para no bloquear, timeout 10s de seguridad
 
 ### Otros Cambios
+- Grabadora de voz: AudioRecorder (OPUS), VoiceRecorderBar con waveform y duración, botón mic en chat
+- Diseño final: X dentro del círculo de progreso, tamaño al lado (2.4 MB)
+- Quitar % del progreso, solo mostrar tamaño (2.4 MB, 52.4 MB, 120 KB, etc.)
+- UX completa: progreso+tamaño en audio/archivo/sticker, duración en video, X cancelar en todo
+- Multimedia UX: progreso circular con X en centro, duración en esquina video, tamaño en subida, sin título en imagen/video
+- Multimedia completo: selectores de imagen/video/audio/archivo + pipeline de subida S3 + envío XML
+- Actualizar changelog y version
 - WelcomeScreen: fondo blanco, logo centrado, titulo y terminos
 - Protocolo completo según guía oficial: edit/delete/forward, multimedia builders, grupos IQ, privacidad, bloqueo
 - MessageBubble final: placeholder/error en imágenes, soporte para image/video/audio/file/contact/sticker, checks siempre visibles
