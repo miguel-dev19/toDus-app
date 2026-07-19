@@ -4,6 +4,9 @@ import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.io.FileOutputStream
 
@@ -13,8 +16,8 @@ class AudioRecorder(private val context: Context) {
     private var startTime = 0L
     private var isRecording = false
     
-    private val _amplitudeFlow = kotlinx.coroutines.flow.MutableStateFlow(0f)
-    val amplitudeFlow = _amplitudeFlow.asStateFlow()
+    private val _amplitudeFlow = MutableStateFlow(0f)
+    val amplitudeFlow: StateFlow<Float> = _amplitudeFlow.asStateFlow()
     
     private var amplitudeJob: Job? = null
 
@@ -36,7 +39,6 @@ class AudioRecorder(private val context: Context) {
                 setOutputFormat(MediaRecorder.OutputFormat.OGG)
                 setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
                 setAudioSamplingRate(16000)
-                setAudioBitRate(32000)
                 setOutputFile(FileOutputStream(outputFile).fd)
                 prepare()
                 start()
@@ -45,7 +47,6 @@ class AudioRecorder(private val context: Context) {
             startTime = System.currentTimeMillis()
             isRecording = true
             
-            // Medir amplitud cada 100ms
             amplitudeJob = CoroutineScope(Dispatchers.IO).launch {
                 while (isActive && isRecording) {
                     try {
