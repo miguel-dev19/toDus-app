@@ -1,12 +1,14 @@
 # Registro de Cambios
 
-## v0.6.43 - 19/07/2026
+## v0.6.44 - 19/07/2026
 
 ### Correcciones
+- AudioRecorder imports, ChatScreen lambda syntax
 - Fix S3Uploader: manejar String? de extractAttribute con ?: ""
 - callback antes de collect, launch separado para no bloquear, timeout 10s de seguridad
 
 ### Otros Cambios
+- Actualizar changelog y version
 - Grabadora de voz: AudioRecorder (OPUS), VoiceRecorderBar con waveform y duración, botón mic en chat
 - Diseño final: X dentro del círculo de progreso, tamaño al lado (2.4 MB)
 - Quitar % del progreso, solo mostrar tamaño (2.4 MB, 52.4 MB, 120 KB, etc.)
