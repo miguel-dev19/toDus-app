@@ -48,7 +48,6 @@ fun MessageBubble(
     val borderColor = if (isMine) MaterialTheme.colorScheme.outline.copy(alpha = 0.15f) else Color.Transparent
     val alignment = if (isMine) Alignment.End else Alignment.Start
     val shape = if (isMine) RoundedCornerShape(12.dp, 4.dp, 12.dp, 12.dp) else RoundedCornerShape(4.dp, 12.dp, 12.dp, 12.dp)
-    val progressPercent = (uploadProgress * 100).toInt()
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
@@ -64,20 +63,20 @@ fun MessageBubble(
         ) {
             Column {
                 when {
-                    // ⭐ IMAGEN
+                    // ⭐ IMAGEN - Subida con círculo+X y tamaño al lado
                     mediaType == "image" -> {
                         Box(modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 250.dp).clip(RoundedCornerShape(8.dp))) {
                             if (isUploading) {
                                 Box(modifier = Modifier.fillMaxSize().background(Color.LightGray.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            CircularProgressIndicator(progress = uploadProgress, modifier = Modifier.size(48.dp), color = accentColor, strokeWidth = 3.dp, trackColor = Color.White.copy(alpha = 0.5f))
-                                            IconButton(onClick = { onCancelUpload?.invoke() }, modifier = Modifier.size(24.dp)) {
-                                                Icon(Icons.Default.Close, "Cancelar", tint = Color.White, modifier = Modifier.size(16.dp))
-                                            }
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                                        // Círculo con progreso y X dentro
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(44.dp)) {
+                                            CircularProgressIndicator(progress = uploadProgress, modifier = Modifier.size(44.dp), color = accentColor, strokeWidth = 3.dp, trackColor = Color.White.copy(alpha = 0.5f))
+                                            Icon(Icons.Default.Close, "Cancelar", tint = accentColor, modifier = Modifier.size(20.dp))
                                         }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(formatSize(mediaSize), fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        // Tamaño al lado
+                                        Text(formatSize(mediaSize), fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Medium)
                                     }
                                 }
                             } else if (mediaUrl != null) {
@@ -93,20 +92,18 @@ fun MessageBubble(
                         }
                     }
 
-                    // ⭐ VIDEO
+                    // ⭐ VIDEO - Subida con círculo+X y tamaño al lado
                     mediaType == "video" -> {
                         Box(modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(8.dp))) {
                             if (isUploading) {
                                 Box(modifier = Modifier.fillMaxSize().background(Color.DarkGray), contentAlignment = Alignment.Center) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            CircularProgressIndicator(progress = uploadProgress, modifier = Modifier.size(48.dp), color = accentColor, strokeWidth = 3.dp, trackColor = Color.White.copy(alpha = 0.5f))
-                                            IconButton(onClick = { onCancelUpload?.invoke() }, modifier = Modifier.size(24.dp)) {
-                                                Icon(Icons.Default.Close, "Cancelar", tint = Color.White, modifier = Modifier.size(16.dp))
-                                            }
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(44.dp)) {
+                                            CircularProgressIndicator(progress = uploadProgress, modifier = Modifier.size(44.dp), color = accentColor, strokeWidth = 3.dp, trackColor = Color.White.copy(alpha = 0.5f))
+                                            Icon(Icons.Default.Close, "Cancelar", tint = accentColor, modifier = Modifier.size(20.dp))
                                         }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(formatSize(mediaSize), fontSize = 12.sp, color = Color.White)
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(formatSize(mediaSize), fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Medium)
                                     }
                                 }
                             } else if (mediaUrl != null) {
@@ -127,13 +124,13 @@ fun MessageBubble(
                         }
                     }
 
-                    // ⭐ AUDIO / VOZ
+                    // ⭐ AUDIO / VOZ - Círculo+X y tamaño al lado
                     mediaType == "audio" || mediaType == "voice" -> {
                         Row(modifier = Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (isUploading) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size(40.dp)) {
                                     CircularProgressIndicator(progress = uploadProgress, modifier = Modifier.size(40.dp), color = accentColor, strokeWidth = 3.dp, trackColor = accentColor.copy(alpha = 0.3f))
-                                    Icon(Icons.Default.Close, "Cancelar", tint = accentColor, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.Close, "Cancelar", tint = accentColor, modifier = Modifier.size(18.dp))
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column(modifier = Modifier.weight(1f)) {
@@ -158,13 +155,13 @@ fun MessageBubble(
                         }
                     }
 
-                    // ⭐ ARCHIVO
+                    // ⭐ ARCHIVO - Círculo+X y tamaño al lado
                     mediaType == "file" -> {
                         Row(modifier = Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (isUploading) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size(40.dp)) {
                                     CircularProgressIndicator(progress = uploadProgress, modifier = Modifier.size(40.dp), color = accentColor, strokeWidth = 3.dp, trackColor = accentColor.copy(alpha = 0.3f))
-                                    Icon(Icons.Default.Close, "Cancelar", tint = accentColor, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.Close, "Cancelar", tint = accentColor, modifier = Modifier.size(18.dp))
                                 }
                             } else {
                                 Icon(Icons.Default.InsertDriveFile, "Archivo", tint = accentColor, modifier = Modifier.size(40.dp))
@@ -177,20 +174,18 @@ fun MessageBubble(
                         }
                     }
 
-                    // ⭐ STICKER
+                    // ⭐ STICKER - Círculo+X y tamaño al lado
                     mediaType == "sticker" -> {
                         Box(modifier = Modifier.size(120.dp)) {
                             if (isUploading) {
                                 Box(modifier = Modifier.fillMaxSize().background(Color.LightGray.copy(alpha = 0.2f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            CircularProgressIndicator(progress = uploadProgress, modifier = Modifier.size(40.dp), color = accentColor, strokeWidth = 3.dp, trackColor = accentColor.copy(alpha = 0.3f))
-                                            IconButton(onClick = { onCancelUpload?.invoke() }, modifier = Modifier.size(20.dp)) {
-                                                Icon(Icons.Default.Close, "Cancelar", tint = accentColor, modifier = Modifier.size(12.dp))
-                                            }
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(36.dp)) {
+                                            CircularProgressIndicator(progress = uploadProgress, modifier = Modifier.size(36.dp), color = accentColor, strokeWidth = 3.dp, trackColor = accentColor.copy(alpha = 0.3f))
+                                            Icon(Icons.Default.Close, "Cancelar", tint = accentColor, modifier = Modifier.size(16.dp))
                                         }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(formatSize(mediaSize), fontSize = 10.sp, color = textColor)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(formatSize(mediaSize), fontSize = 11.sp, color = textColor)
                                     }
                                 }
                             } else if (mediaUrl != null) {
