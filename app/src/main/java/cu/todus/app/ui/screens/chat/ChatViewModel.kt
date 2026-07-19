@@ -9,6 +9,7 @@ import cu.todus.app.data.local.dao.ChatDao
 import cu.todus.app.data.local.dao.MessageDao
 import cu.todus.app.data.local.entity.MessageEntity
 import cu.todus.app.data.remote.ToDusMessage
+import cu.todus.app.data.remote.ToDusProtocol
 import cu.todus.app.data.remote.XmppClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -24,8 +25,6 @@ class ChatViewModel(
     val messages: StateFlow<List<MessageEntity>> = _messages
     private val _messageText = MutableStateFlow("")
     val messageText: StateFlow<String> = _messageText
-    private val _isLoadingOffline = MutableStateFlow(false)
-    val isLoadingOffline: StateFlow<Boolean> = _isLoadingOffline
     var lastSeen by mutableStateOf("")
         private set
     private var lastComposingSent = 0L
@@ -49,14 +48,14 @@ class ChatViewModel(
     private suspend fun processMessage(msg: ToDusMessage) {
         val sender = msg.from.split("@")[0]
         if (sender != chatJid && msg.from != chatJid) return
-        
+
         when {
             msg.rawXml.contains("<csp ") -> lastSeen = "escribiendo..."
-            msg.rawXml.contains("<csc ") -> lastSeen = "en linea"
+            msg.rawXml.contains("<csc ") -> lastSeen = "en línea"
             msg.isReceipt && msg.receiptMsgId != null -> {
                 messageDao.updateState(msg.receiptMsgId, if (msg.rawXml.contains("<dd ")) "read" else "delivered")
             }
-            msg.isPresence -> lastSeen = "en linea"
+            msg.isPresence -> lastSeen = "en línea"
             msg.isDeliveryAck && msg.receiptMsgId != null -> {
                 messageDao.updateState(msg.receiptMsgId, "delivered")
             }
@@ -71,7 +70,7 @@ class ChatViewModel(
     }
 
     private fun requestOffline() {
-        viewModelScope.launch { _isLoadingOffline.value = true; xmppClient.requestOfflineMessages(); delay(2000); _isLoadingOffline.value = false }
+        viewModelScope.launch { xmppClient.requestOfflineMessages() }
     }
 
     fun onMessageTextChanged(text: String) {
