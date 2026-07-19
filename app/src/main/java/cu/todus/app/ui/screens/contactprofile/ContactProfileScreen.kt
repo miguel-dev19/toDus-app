@@ -2,6 +2,7 @@ package cu.todus.app.ui.screens.contactprofile
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -43,18 +44,11 @@ fun ContactProfileScreen(phone: String, onBack: () -> Unit, onMessage: (String, 
     var isBlocked by remember { mutableStateOf(false) }
     val context = LocalContext.current; val app = context.applicationContext as ToDusApp
     val scope = rememberCoroutineScope()
+    val connectionState by app.xmppClient.connectionState.collectAsState()
 
+    // ⭐ CORREGIDO: Callback primero, collect en launch separado
     LaunchedEffect(phone) {
-        try {
-            // Esperar conexión
-            app.xmppClient.connectionState.collect { state ->
-                if (state == ConnectionState.CONNECTED) {
-                    app.xmppClient.requestUserInfo(phone)
-                }
-            }
-        } catch (_: Exception) {}
-        
-        // Configurar callback
+        // 1. Configurar el callback ANTES de cualquier collect
         app.xmppClient.onProfileResponse = { stanza ->
             scope.launch(Dispatchers.IO) {
                 val pm = ProfileManager(app.xmppClient)
@@ -72,10 +66,27 @@ fun ContactProfileScreen(phone: String, onBack: () -> Unit, onMessage: (String, 
                 }
             }
         }
+
+        // 2. Escuchar conexión en corrutina separada (NO bloquea)
+        launch {
+            app.xmppClient.connectionState.collect { state ->
+                if (state == ConnectionState.CONNECTED) {
+                    app.xmppClient.requestUserInfo(phone)
+                }
+            }
+        }
         
-        // Pedir perfil si ya está conectado
+        // 3. Si ya está conectado, pedir perfil inmediatamente
         if (app.xmppClient.connectionState.value == ConnectionState.CONNECTED) {
             app.xmppClient.requestUserInfo(phone)
+        }
+        
+        // 4. Timeout de seguridad: si en 10s no carga, mostrar datos básicos
+        launch {
+            delay(10000)
+            if (isLoading) {
+                withContext(Dispatchers.Main) { isLoading = false }
+            }
         }
     }
 
@@ -106,7 +117,11 @@ fun ContactProfileScreen(phone: String, onBack: () -> Unit, onMessage: (String, 
     ) { padding ->
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = ToDusColors.Red)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = ToDusColors.Red)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Cargando perfil...", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         } else {
             Column(
@@ -115,7 +130,6 @@ fun ContactProfileScreen(phone: String, onBack: () -> Unit, onMessage: (String, 
             ) {
                 Spacer(modifier = Modifier.height(32.dp))
                 
-                // Foto de perfil grande
                 Box(modifier = Modifier.size(120.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
                     if (photoUrl != null) {
                         AsyncImage(model = photoUrl, contentDescription = "Foto de perfil", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -125,21 +139,16 @@ fun ContactProfileScreen(phone: String, onBack: () -> Unit, onMessage: (String, 
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
-
-                // Nombre
                 Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, textAlign = TextAlign.Center)
-
-                // @usuario
+                
                 if (toDusId.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text("@$toDusId", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
                 }
-
-                // Teléfono
+                
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(phone, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-                // Biografía
+                
                 if (bio.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(bio, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, lineHeight = 20.sp, modifier = Modifier.padding(horizontal = 32.dp))
@@ -147,12 +156,10 @@ fun ContactProfileScreen(phone: String, onBack: () -> Unit, onMessage: (String, 
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Botones de acción
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Enviar mensaje
                     Button(
                         onClick = { onMessage(phone, name) },
                         modifier = Modifier.weight(1f).height(48.dp),
@@ -164,7 +171,6 @@ fun ContactProfileScreen(phone: String, onBack: () -> Unit, onMessage: (String, 
                         Text("Enviar mensaje", color = Color.White, fontSize = 14.sp)
                     }
 
-                    // Llamar
                     OutlinedButton(
                         onClick = { /* Llamar */ },
                         modifier = Modifier.size(48.dp),
@@ -175,7 +181,6 @@ fun ContactProfileScreen(phone: String, onBack: () -> Unit, onMessage: (String, 
                         Icon(Icons.Default.Call, "Llamar", tint = ToDusColors.Green, modifier = Modifier.size(20.dp))
                     }
 
-                    // Videollamada
                     OutlinedButton(
                         onClick = { /* Videollamada */ },
                         modifier = Modifier.size(48.dp),
@@ -189,7 +194,6 @@ fun ContactProfileScreen(phone: String, onBack: () -> Unit, onMessage: (String, 
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Tarjeta de información
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     shape = RoundedCornerShape(16.dp),
@@ -202,9 +206,8 @@ fun ContactProfileScreen(phone: String, onBack: () -> Unit, onMessage: (String, 
                     }
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                // Opciones adicionales
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     shape = RoundedCornerShape(16.dp),
