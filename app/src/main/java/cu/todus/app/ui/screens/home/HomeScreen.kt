@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.*
@@ -43,28 +45,20 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onP
     val totalUnread = chats.sumOf { it.unreadCount }
     val scope = rememberCoroutineScope()
 
-    // ⭐ REACTIVO: Reacciona al cambio de connectionState, sin bucles while/delay
     LaunchedEffect(connectionState) {
         val phone = jwtManager.getPhone() ?: return@LaunchedEffect
-        
-        // Configurar callback del perfil
         app.xmppClient.onProfileResponse = { stanza ->
             scope.launch(Dispatchers.IO) {
                 val pm = ProfileManager(app.xmppClient)
                 pm.getProfile(phone).onSuccess { profile ->
                     val alias = profile.alias.ifEmpty { phone }
                     val photo = profile.photoUrl
-                    withContext(Dispatchers.Main) {
-                        userName = alias
-                        userAvatar = photo
-                    }
+                    withContext(Dispatchers.Main) { userName = alias; userAvatar = photo }
                     jwtManager.saveProfile(alias, photo, profile.toDusId)
                     jwtManager.saveDescription(profile.description)
                 }
             }
         }
-
-        // Si conectado, pedir perfil
         if (connectionState == ConnectionState.CONNECTED) {
             app.xmppClient.requestUserInfo(phone)
         }
@@ -73,27 +67,24 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onP
     Scaffold(
         topBar = { HomeTopBar(connectionState, userName, userAvatar, onProfileClick) },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            FloatingActionButton(
                 onClick = onNewChat,
                 containerColor = ToDusColors.Red,
-                contentColor = ToDusColors.White,
-                shape = RoundedCornerShape(16.dp)
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(56.dp)
             ) {
-                Icon(Icons.Outlined.ChatBubbleOutline, "Nuevo Chat", modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Nuevo Chat")
-                if (totalUnread > 0) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Box(modifier = Modifier.size(20.dp).clip(RoundedCornerShape(10.dp)).background(Color.White), contentAlignment = Alignment.Center) {
-                        Text("$totalUnread", color = ToDusColors.Red, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
+                Icon(Icons.Default.Chat, "Nuevo Chat", modifier = Modifier.size(24.dp))
             }
         }
     ) { padding ->
         if (chats.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Icon(Icons.Outlined.ChatBubbleOutline, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Outlined.ChatBubbleOutline, null, modifier = Modifier.size(72.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("No hay chats", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                }
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(bottom = 80.dp)) {
@@ -102,10 +93,7 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onP
                     val dismissState = rememberSwipeToDismissBoxState(
                         confirmValueChange = { value ->
                             if (value == SwipeToDismissBoxValue.EndToStart) {
-                                scope.launch(Dispatchers.IO) {
-                                    db.chatDao().delete(chat)
-                                    db.chatDao().deleteMessages(chat.jid)
-                                }
+                                scope.launch(Dispatchers.IO) { db.chatDao().delete(chat); db.chatDao().deleteMessages(chat.jid) }
                                 true
                             } else false
                         }
