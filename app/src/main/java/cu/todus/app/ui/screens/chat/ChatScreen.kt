@@ -34,9 +34,11 @@ import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.ImageCompressor
 import cu.todus.app.data.local.ToDusDatabase
 import cu.todus.app.data.local.entity.MessageEntity
+import cu.todus.app.data.remote.S3Uploader
 import cu.todus.app.ui.components.MessageBubble
 import cu.todus.app.ui.theme.ToDusColors
 import kotlinx.coroutines.*
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -51,26 +53,58 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
     val listState = rememberLazyListState()
     var showAttachMenu by remember { mutableStateOf(false) }
     var isUploading by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    // ⭐ Selector de imágenes nativo
+    // ⭐ Selector de imágenes
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             showAttachMenu = false
             isUploading = true
+            uploadProgress = "Comprimiendo imagen..."
+            
             scope.launch(Dispatchers.IO) {
-                val result = ImageCompressor.compress(context, it)
-                result.onSuccess { file ->
-                    // TODO: Subir a S3 y enviar mensaje con URL
+                // 1. Comprimir
+                val compressResult = ImageCompressor.compress(context, it)
+                
+                compressResult.onSuccess { file ->
+                    uploadProgress = "Subiendo a S3..."
+                    
+                    // 2. Subir a S3
+                    val s3 = S3Uploader(app.xmppClient)
+                    val uploadResult = s3.uploadCompressedFile(file, 4)
+                    
+                    uploadResult.onSuccess { urls ->
+                        // 3. Enviar mensaje con URL
+                        val msgId = cu.todus.app.data.remote.ToDusProtocol.randomHex(16)
+                        val msgXml = cu.todus.app.data.remote.ToDusProtocol.buildImageMessage(
+                            to = chatJid,
+                            s3Url = urls.getUrl,
+                            fileName = file.name,
+                            size = file.length()
+                        )
+                        app.xmppClient.sendIq(msgXml)
+                        
+                        withContext(Dispatchers.Main) {
+                            isUploading = false
+                            uploadProgress = ""
+                        }
+                        
+                        // Limpiar archivo temporal
+                        file.delete()
+                    }.onFailure { e ->
+                        withContext(Dispatchers.Main) {
+                            isUploading = false
+                            uploadProgress = "Error: ${e.message}"
+                        }
+                    }
+                }.onFailure { e ->
                     withContext(Dispatchers.Main) {
                         isUploading = false
-                        // Por ahora, enviamos un mensaje de texto indicando la imagen
-                        viewModel.sendMessage()
+                        uploadProgress = "Error: ${e.message}"
                     }
-                }.onFailure {
-                    withContext(Dispatchers.Main) { isUploading = false }
                 }
             }
         }
@@ -86,9 +120,7 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
     }
 
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty() && isAtBottom) {
-            listState.animateScrollToItem(messages.size - 1)
-        }
+        if (messages.isNotEmpty() && isAtBottom) listState.animateScrollToItem(messages.size - 1)
     }
 
     val groupedMessages = remember(messages) {
@@ -129,9 +161,15 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
         },
         bottomBar = {
             Column {
-                // Indicador de subida
+                // ⭐ Indicador de subida con texto
                 AnimatedVisibility(visible = isUploading) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = ToDusColors.Red)
+                    Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = ToDusColors.Red, strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(uploadProgress, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 }
                 
                 Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
@@ -155,7 +193,6 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                         }
 
                         Spacer(modifier = Modifier.width(4.dp))
-
                         AnimatedContent(targetState = messageText.isNotBlank()) { hasText ->
                             if (hasText) {
                                 IconButton(onClick = { viewModel.sendMessage() }, modifier = Modifier.size(42.dp)) {
@@ -170,7 +207,6 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                     }
                 }
 
-                // ⭐ Menú de adjuntar con selector de imágenes
                 AnimatedVisibility(
                     visible = showAttachMenu,
                     enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
@@ -215,7 +251,14 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                                 }
                             }
                             is MessageEntity -> {
-                                MessageBubble(text = item.body, time = item.timestamp, isMine = item.senderPhone == "me", state = item.state)
+                                MessageBubble(
+                                    text = item.body,
+                                    time = item.timestamp,
+                                    isMine = item.senderPhone == "me",
+                                    state = item.state,
+                                    mediaUrl = item.mediaUrl,
+                                    mediaType = item.type
+                                )
                             }
                         }
                     }

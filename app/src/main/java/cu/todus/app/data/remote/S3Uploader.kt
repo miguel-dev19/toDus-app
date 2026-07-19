@@ -2,142 +2,119 @@ package cu.todus.app.data.remote
 
 import android.content.Context
 import android.net.Uri
-import android.util.Base64
 import kotlinx.coroutines.*
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
-import java.net.Socket
-import java.net.URL
-import java.security.SecureRandom
-import java.security.cert.X509Certificate
-import java.util.UUID
-import javax.net.ssl.SSLContext
-import javax.net.ssl.X509TrustManager
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
+import java.io.FileInputStream
 
 class S3Uploader(private val xmppClient: XmppClient) {
-    
-    companion object {
-        private fun trustAllSSL(): SSLContext {
-            val tm = object : X509TrustManager {
-                override fun checkClientTrusted(c: Array<X509Certificate>?, a: String?) {}
-                override fun checkServerTrusted(c: Array<X509Certificate>?, a: String?) {}
-                override fun getAcceptedIssuers() = arrayOf<X509Certificate>()
+    private val okHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+
+    data class S3Urls(val putUrl: String, val getUrl: String)
+
+    /**
+     * Pipeline completo: solicitar URL → subir → devolver URL pública
+     */
+    suspend fun uploadFile(
+        context: Context,
+        uri: Uri,
+        fileType: Int = 4 // 4 = imagen, 3 = video, 2 = audio
+    ): Result<S3Urls> = withContext(Dispatchers.IO) {
+        try {
+            // 1. Leer archivo
+            val inputStream = context.contentResolver.openInputStream(uri)
+                ?: return@withContext Result.failure(Exception("No se pudo abrir el archivo"))
+            val bytes = inputStream.readBytes()
+            inputStream.close()
+            val size = bytes.size.toLong()
+
+            // 2. Solicitar URL de subida
+            xmppClient.sendIq(ToDusProtocol.buildS3UploadIq(fileType, size))
+            
+            // Esperar respuesta
+            var iqResponse = ""
+            val start = System.currentTimeMillis()
+            while (iqResponse.isEmpty() && System.currentTimeMillis() - start < 10000) {
+                delay(200)
+                iqResponse = xmppClient.getLastIqResponse()
             }
-            return SSLContext.getInstance("TLS").apply { init(null, arrayOf(tm), SecureRandom()) }
+
+            if (!iqResponse.contains("todus:purl")) {
+                return@withContext Result.failure(Exception("No se recibió respuesta del servidor S3"))
+            }
+
+            val putUrl = ToDusProtocol.extractAttribute(iqResponse, "put")
+            val getUrl = ToDusProtocol.extractAttribute(iqResponse, "get")
+                ?: return@withContext Result.failure(Exception("URLs no encontradas en respuesta"))
+
+            // 3. Subir archivo a S3
+            val requestBody = bytes.toRequestBody("application/octet-stream".toMediaType())
+            val request = Request.Builder()
+                .url(putUrl)
+                .put(requestBody)
+                .header("Content-Length", size.toString())
+                .build()
+
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) {
+                return@withContext Result.failure(Exception("Error subiendo: ${response.code}"))
+            }
+
+            Result.success(S3Urls(putUrl, getUrl))
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
-    
-    private suspend fun getS3UrlsViaSocket(phone: String, jwt: String, fileType: Int, fileSize: Int): Pair<String, String> = withContext(Dispatchers.IO) {
-        var socket: Socket? = null
-        var ssl: java.net.Socket? = null
-        var writer: OutputStreamWriter? = null
-        var reader: BufferedReader? = null
-        
+
+    /**
+     * Subir imagen de perfil
+     */
+    suspend fun uploadProfileImage(uri: Uri, context: Context, phone: String, jwt: String): Result<String> {
+        return uploadFile(context, uri, 5).map { it.getUrl }
+    }
+
+    /**
+     * Subir desde archivo ya comprimido
+     */
+    suspend fun uploadCompressedFile(file: File, fileType: Int = 4): Result<S3Urls> {
         try {
-            val sslContext = trustAllSSL()
-            val factory = sslContext.socketFactory
-            
-            socket = Socket("ws.todus.cu", 1756)
-            socket.soTimeout = 30000
-            ssl = factory.createSocket(socket, "ws.todus.cu", 1756, true)
-            writer = OutputStreamWriter(ssl.getOutputStream())
-            reader = BufferedReader(InputStreamReader(ssl.getInputStream()))
-            
-            fun readUntil(vararg markers: String): String {
-                val sb = StringBuilder()
-                val buf = CharArray(4096)
-                var tries = 0
-                while (tries < 50) {
-                    if (reader!!.ready()) {
-                        val len = reader.read(buf)
-                        if (len > 0) sb.append(buf, 0, len)
-                        val s = sb.toString()
-                        for (m in markers) if (s.contains(m)) return s
-                    } else { Thread.sleep(100); tries++ }
-                }
-                return sb.toString()
+            val bytes = file.readBytes()
+            val size = bytes.size.toLong()
+
+            xmppClient.sendIq(ToDusProtocol.buildS3UploadIq(fileType, size))
+
+            var iqResponse = ""
+            val start = System.currentTimeMillis()
+            while (iqResponse.isEmpty() && System.currentTimeMillis() - start < 10000) {
+                delay(200)
+                iqResponse = xmppClient.getLastIqResponse()
             }
-            
-            // Stream open
-            writer.write("<?xml version=\"1.0\"?><stream:stream to=\"im.todus.cu\" xmlns=\"jc\" xmlns:stream=\"x1\" version=\"1.0\">")
-            writer.flush(); readUntil("stream:features")
-            
-            // SASL
-            val auth = Base64.encodeToString("\u0000$phone\u0000$jwt".toByteArray(), Base64.NO_WRAP)
-            writer.write("<auth xmlns=\"urn:ietf:params:xml:ns:xmpp-sasl\" mechanism=\"PLAIN\">$auth</auth>")
-            writer.flush(); readUntil("<ok")
-            
-            // Reiniciar stream
-            writer.write("<?xml version=\"1.0\"?><stream:stream to=\"im.todus.cu\" xmlns=\"jc\" xmlns:stream=\"x1\" version=\"1.0\">")
-            writer.flush(); readUntil("stream:features")
-            
-            // Bind
-            val bindId = UUID.randomUUID().toString().replace("-", "").take(8)
-            writer.write("<iq type=\"set\" id=\"$bindId\"><bind xmlns=\"urn:ietf:params:xml:ns:xmpp-bind\"><resource>s3up</resource></bind></iq>")
-            writer.flush(); readUntil("</iq>")
-            
-            // Session
-            val sessId = UUID.randomUUID().toString().replace("-", "").take(8)
-            writer.write("<iq type=\"set\" id=\"$sessId\"><session xmlns=\"urn:ietf:params:xml:ns:xmpp-session\"/></iq>")
-            writer.flush(); readUntil("</iq>")
-            
-            // Solicitar URLs S3
-            val iqId = UUID.randomUUID().toString().replace("-", "").take(8)
-            writer.write("<iq type=\"get\" id=\"$iqId\"><query xmlns=\"todus:purl\" type=\"$fileType\" persistent=\"true\" size=\"$fileSize\" room=\"\"/></iq>")
-            writer.flush()
-            val resp = readUntil("</iq>")
-            
-            val putUrl = Regex("put='([^']+)'").find(resp)?.groupValues?.get(1)?.replace("&amp;", "&") ?: throw Exception("No PUT URL")
-            val getUrl = Regex("get='([^']+)'").find(resp)?.groupValues?.get(1)?.replace("&amp;", "&") ?: throw Exception("No GET URL")
-            
-            Pair(putUrl, getUrl)
-        } finally {
-            try { writer?.close() } catch (_: Exception) {}
-            try { reader?.close() } catch (_: Exception) {}
-            try { ssl?.close() } catch (_: Exception) {}
-            try { socket?.close() } catch (_: Exception) {}
+
+            val putUrl = ToDusProtocol.extractAttribute(iqResponse, "put")
+            val getUrl = ToDusProtocol.extractAttribute(iqResponse, "get")
+                ?: return Result.failure(Exception("URLs no encontradas"))
+
+            val requestBody = bytes.toRequestBody("application/octet-stream".toMediaType())
+            val request = Request.Builder()
+                .url(putUrl)
+                .put(requestBody)
+                .header("Content-Length", size.toString())
+                .build()
+
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) {
+                return Result.failure(Exception("Error subiendo: ${response.code}"))
+            }
+
+            Result.success(S3Urls(putUrl, getUrl))
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-    }
-    
-    suspend fun uploadProfileImage(uri: Uri, context: Context, phone: String, jwt: String): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val data = context.contentResolver.openInputStream(uri)!!.readBytes()
-            val (putUrl, getUrl) = getS3UrlsViaSocket(phone, jwt, 5, data.size)
-            
-            val url = URL(putUrl)
-            val http = url.openConnection() as HttpURLConnection
-            http.requestMethod = "PUT"
-            http.setRequestProperty("Content-Type", "application/octet-stream")
-            http.setRequestProperty("Content-Length", data.size.toString())
-            http.doOutput = true
-            http.connectTimeout = 30000
-            http.readTimeout = 30000
-            http.outputStream.use { it.write(data) }
-            
-            if (http.responseCode in 200..299) Result.success(getUrl)
-            else Result.failure(Exception("HTTP ${http.responseCode}"))
-        } catch (e: Exception) { Result.failure(e) }
-    }
-    
-    suspend fun uploadImage(uri: Uri, context: Context, phone: String, jwt: String): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val data = context.contentResolver.openInputStream(uri)!!.readBytes()
-            val (putUrl, getUrl) = getS3UrlsViaSocket(phone, jwt, 4, data.size)
-            
-            val url = URL(putUrl)
-            val http = url.openConnection() as HttpURLConnection
-            http.requestMethod = "PUT"
-            http.setRequestProperty("Content-Type", "application/octet-stream")
-            http.setRequestProperty("Content-Length", data.size.toString())
-            http.doOutput = true
-            http.connectTimeout = 30000
-            http.readTimeout = 30000
-            http.outputStream.use { it.write(data) }
-            
-            if (http.responseCode in 200..299) Result.success(getUrl)
-            else Result.failure(Exception("HTTP ${http.responseCode}"))
-        } catch (e: Exception) { Result.failure(e) }
     }
 }
