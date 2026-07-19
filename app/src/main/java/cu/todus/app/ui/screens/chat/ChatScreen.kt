@@ -1,5 +1,8 @@
 package cu.todus.app.ui.screens.chat
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,17 +22,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import cu.todus.app.ToDusApp
+import cu.todus.app.data.local.ImageCompressor
 import cu.todus.app.data.local.ToDusDatabase
 import cu.todus.app.data.local.entity.MessageEntity
 import cu.todus.app.ui.components.MessageBubble
 import cu.todus.app.ui.theme.ToDusColors
+import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -42,8 +49,33 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val messageText by viewModel.messageText.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    var showAttachMenu by remember { mutableStateOf(false) }
+    var isUploading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
-    // ⭐ PRO-TIP: Solo auto-scroll si el usuario ya estaba al final
+    // ⭐ Selector de imágenes nativo
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            showAttachMenu = false
+            isUploading = true
+            scope.launch(Dispatchers.IO) {
+                val result = ImageCompressor.compress(context, it)
+                result.onSuccess { file ->
+                    // TODO: Subir a S3 y enviar mensaje con URL
+                    withContext(Dispatchers.Main) {
+                        isUploading = false
+                        // Por ahora, enviamos un mensaje de texto indicando la imagen
+                        viewModel.sendMessage()
+                    }
+                }.onFailure {
+                    withContext(Dispatchers.Main) { isUploading = false }
+                }
+            }
+        }
+    }
+
     val isAtBottom by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
@@ -59,16 +91,12 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
         }
     }
 
-    // Agrupar mensajes por fecha
     val groupedMessages = remember(messages) {
         val grouped = mutableListOf<Any>()
         var lastDate = ""
         for (msg in messages) {
             val msgDate = SimpleDateFormat("dd 'de' MMMM 'de' yyyy", Locale("es")).format(Date(msg.timestamp))
-            if (msgDate != lastDate) {
-                grouped.add(msgDate)
-                lastDate = msgDate
-            }
+            if (msgDate != lastDate) { grouped.add(msgDate); lastDate = msgDate }
             grouped.add(msg)
         }
         grouped
@@ -78,128 +106,84 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        modifier = Modifier.clickable { onContactProfile(chatJid) },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
+                    Row(modifier = Modifier.clickable { onContactProfile(chatJid) }, verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
                             Text(chatName.first().uppercase(), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(chatName, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            // ⭐ Estado dinámico
                             AnimatedVisibility(visible = viewModel.lastSeen.isNotEmpty()) {
                                 Text(viewModel.lastSeen, fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
                             }
                         }
                     }
                 },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
-                    }
-                },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White) } },
                 actions = {
-                    IconButton(onClick = { /* Llamada de voz */ }) {
-                        Icon(Icons.Default.Call, "Llamar", tint = Color.White)
-                    }
-                    IconButton(onClick = { /* Videollamada */ }) {
-                        Icon(Icons.Default.Videocam, "Videollamada", tint = Color.White)
-                    }
+                    IconButton(onClick = { /* Llamada */ }) { Icon(Icons.Default.Call, "Llamar", tint = Color.White) }
+                    IconButton(onClick = { /* Videollamada */ }) { Icon(Icons.Default.Videocam, "Videollamada", tint = Color.White) }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = ToDusColors.Red,
-                    titleContentColor = Color.White
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ToDusColors.Red, titleContentColor = Color.White)
             )
         },
         bottomBar = {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 8.dp
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 6.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // ⭐ Botón adjuntar con animación
-                    var showAttachMenu by remember { mutableStateOf(false) }
-                    IconButton(
-                        onClick = { showAttachMenu = !showAttachMenu },
-                        modifier = Modifier.size(42.dp)
+            Column {
+                // Indicador de subida
+                AnimatedVisibility(visible = isUploading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = ToDusColors.Red)
+                }
+                
+                Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 6.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            if (showAttachMenu) Icons.Default.Close else Icons.Default.AttachFile,
-                            "Adjuntar",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
+                        IconButton(onClick = { showAttachMenu = !showAttachMenu }, modifier = Modifier.size(42.dp)) {
+                            Icon(if (showAttachMenu) Icons.Default.Close else Icons.Default.AttachFile, "Adjuntar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                        }
 
-                    // Campo de texto
-                    Surface(
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                    ) {
-                        OutlinedTextField(
-                            value = messageText,
-                            onValueChange = { viewModel.onMessageTextChanged(it) },
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                            placeholder = { Text("Mensaje", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 15.sp) },
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp),
-                            maxLines = 5,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color.Transparent,
-                                unfocusedBorderColor = Color.Transparent,
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent
+                        Surface(modifier = Modifier.weight(1f), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)) {
+                            OutlinedTextField(
+                                value = messageText, onValueChange = { viewModel.onMessageTextChanged(it) },
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                                placeholder = { Text("Mensaje", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 15.sp) },
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp),
+                                maxLines = 5,
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent, focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent)
                             )
-                        )
-                    }
+                        }
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
 
-                    // Botón enviar / micrófono
-                    AnimatedContent(targetState = messageText.isNotBlank()) { hasText ->
-                        if (hasText) {
-                            IconButton(onClick = { viewModel.sendMessage() }, modifier = Modifier.size(42.dp)) {
-                                Icon(Icons.AutoMirrored.Filled.Send, "Enviar", tint = ToDusColors.Red, modifier = Modifier.size(22.dp))
-                            }
-                        } else {
-                            IconButton(onClick = { /* Grabar nota de voz */ }, modifier = Modifier.size(42.dp)) {
-                                Icon(Icons.Default.Mic, "Grabar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                        AnimatedContent(targetState = messageText.isNotBlank()) { hasText ->
+                            if (hasText) {
+                                IconButton(onClick = { viewModel.sendMessage() }, modifier = Modifier.size(42.dp)) {
+                                    Icon(Icons.AutoMirrored.Filled.Send, "Enviar", tint = ToDusColors.Red, modifier = Modifier.size(22.dp))
+                                }
+                            } else {
+                                IconButton(onClick = { /* Grabar nota de voz */ }, modifier = Modifier.size(42.dp)) {
+                                    Icon(Icons.Default.Mic, "Grabar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // ⭐ Menú de adjuntar (animado)
-            AnimatedVisibility(
-                visible = showAttachMenu,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 4.dp
+                // ⭐ Menú de adjuntar con selector de imágenes
+                AnimatedVisibility(
+                    visible = showAttachMenu,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        AttachOption(Icons.Default.Image, "Imagen") { /* TODO */ }
-                        AttachOption(Icons.Default.Videocam, "Video") { /* TODO */ }
-                        AttachOption(Icons.Default.Audiotrack, "Audio") { /* TODO */ }
-                        AttachOption(Icons.Default.InsertDriveFile, "Archivo") { /* TODO */ }
-                        AttachOption(Icons.Default.LocationOn, "Ubicación") { /* TODO */ }
+                    Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, shadowElevation = 4.dp) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            AttachOption(Icons.Default.Image, "Imagen") { imagePicker.launch("image/*") }
+                            AttachOption(Icons.Default.Videocam, "Video") { /* TODO */ }
+                            AttachOption(Icons.Default.Audiotrack, "Audio") { /* TODO */ }
+                            AttachOption(Icons.Default.InsertDriveFile, "Archivo") { /* TODO */ }
+                            AttachOption(Icons.Default.LocationOn, "Ubicación") { /* TODO */ }
+                        }
                     }
                 }
             }
@@ -220,11 +204,7 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                     }
                 }
             } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
                     items(groupedMessages) { item ->
                         when (item) {
                             is String -> {
@@ -247,10 +227,7 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
 
 @Composable
 fun AttachOption(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick).padding(8.dp)
-    ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onClick).padding(8.dp)) {
         Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(ToDusColors.Red.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
             Icon(icon, label, tint = ToDusColors.Red, modifier = Modifier.size(22.dp))
         }
