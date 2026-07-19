@@ -19,15 +19,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import cu.todus.app.ToDusApp
 import cu.todus.app.data.local.ToDusDatabase
 import cu.todus.app.data.local.entity.MessageEntity
@@ -45,11 +42,19 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val messageText by viewModel.messageText.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
-    var lastSeen by remember { mutableStateOf("") }
 
-    // Auto-scroll al recibir/enviar mensaje
+    // ⭐ PRO-TIP: Solo auto-scroll si el usuario ya estaba al final
+    val isAtBottom by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val visibleItemsInfo = layoutInfo.visibleItemsInfo
+            if (layoutInfo.totalItemsCount == 0) true
+            else visibleItemsInfo.lastOrNull()?.index ?: 0 >= layoutInfo.totalItemsCount - 2
+        }
+    }
+
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
+        if (messages.isNotEmpty() && isAtBottom) {
             listState.animateScrollToItem(messages.size - 1)
         }
     }
@@ -77,7 +82,6 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                         modifier = Modifier.clickable { onContactProfile(chatJid) },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Avatar del contacto
                         Box(
                             modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
@@ -87,8 +91,9 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(chatName, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (lastSeen.isNotEmpty()) {
-                                Text(lastSeen, fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
+                            // ⭐ Estado dinámico
+                            AnimatedVisibility(visible = viewModel.lastSeen.isNotEmpty()) {
+                                Text(viewModel.lastSeen, fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
                             }
                         }
                     }
@@ -113,7 +118,6 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
             )
         },
         bottomBar = {
-            // Barra de escritura estilo WhatsApp
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surface,
@@ -123,9 +127,18 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                     modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 6.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Botón adjuntar
-                    IconButton(onClick = { /* Adjuntar archivo */ }, modifier = Modifier.size(42.dp)) {
-                        Icon(Icons.Default.AttachFile, "Adjuntar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                    // ⭐ Botón adjuntar con animación
+                    var showAttachMenu by remember { mutableStateOf(false) }
+                    IconButton(
+                        onClick = { showAttachMenu = !showAttachMenu },
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Icon(
+                            if (showAttachMenu) Icons.Default.Close else Icons.Default.AttachFile,
+                            "Adjuntar",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
 
                     // Campo de texto
@@ -153,14 +166,40 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                     Spacer(modifier = Modifier.width(4.dp))
 
                     // Botón enviar / micrófono
-                    if (messageText.isNotBlank()) {
-                        IconButton(onClick = { viewModel.sendMessage() }, modifier = Modifier.size(42.dp)) {
-                            Icon(Icons.AutoMirrored.Filled.Send, "Enviar", tint = ToDusColors.Red, modifier = Modifier.size(22.dp))
+                    AnimatedContent(targetState = messageText.isNotBlank()) { hasText ->
+                        if (hasText) {
+                            IconButton(onClick = { viewModel.sendMessage() }, modifier = Modifier.size(42.dp)) {
+                                Icon(Icons.AutoMirrored.Filled.Send, "Enviar", tint = ToDusColors.Red, modifier = Modifier.size(22.dp))
+                            }
+                        } else {
+                            IconButton(onClick = { /* Grabar nota de voz */ }, modifier = Modifier.size(42.dp)) {
+                                Icon(Icons.Default.Mic, "Grabar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+                            }
                         }
-                    } else {
-                        IconButton(onClick = { /* Grabar nota de voz */ }, modifier = Modifier.size(42.dp)) {
-                            Icon(Icons.Default.Mic, "Grabar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
-                        }
+                    }
+                }
+            }
+
+            // ⭐ Menú de adjuntar (animado)
+            AnimatedVisibility(
+                visible = showAttachMenu,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 4.dp
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        AttachOption(Icons.Default.Image, "Imagen") { /* TODO */ }
+                        AttachOption(Icons.Default.Videocam, "Video") { /* TODO */ }
+                        AttachOption(Icons.Default.Audiotrack, "Audio") { /* TODO */ }
+                        AttachOption(Icons.Default.InsertDriveFile, "Archivo") { /* TODO */ }
+                        AttachOption(Icons.Default.LocationOn, "Ubicación") { /* TODO */ }
                     }
                 }
             }
@@ -168,7 +207,6 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (messages.isEmpty()) {
-                // Empty state
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(modifier = Modifier.size(80.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
@@ -190,7 +228,6 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                     items(groupedMessages) { item ->
                         when (item) {
                             is String -> {
-                                // Separador de fecha
                                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
                                     Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
                                         Text(item, modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
@@ -205,5 +242,19 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                 }
             }
         }
+    }
+}
+
+@Composable
+fun AttachOption(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(onClick = onClick).padding(8.dp)
+    ) {
+        Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(ToDusColors.Red.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+            Icon(icon, label, tint = ToDusColors.Red, modifier = Modifier.size(22.dp))
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
