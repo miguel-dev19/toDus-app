@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import cu.todus.app.data.local.dao.ChatDao
 import cu.todus.app.data.local.dao.ContactDao
 import cu.todus.app.data.local.dao.MessageDao
@@ -28,6 +30,36 @@ abstract class ToDusDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: ToDusDatabase? = null
 
+        // ⭐ FIX: Migraciones que NO borran datos
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN mediaUrl TEXT")
+                db.execSQL("ALTER TABLE messages ADD COLUMN isReceipt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE messages ADD COLUMN receiptMsgId TEXT")
+                db.execSQL("ALTER TABLE messages ADD COLUMN isComposing INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE messages ADD COLUMN isPresence INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE messages ADD COLUMN isDeliveryAck INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS profiles (
+                        phone TEXT PRIMARY KEY NOT NULL, 
+                        alias TEXT, 
+                        description TEXT, 
+                        photoUrl TEXT, 
+                        photoThumbUrl TEXT, 
+                        todusId TEXT, 
+                        official INTEGER NOT NULL DEFAULT 0, 
+                        "exists" INTEGER NOT NULL DEFAULT 0, 
+                        lastUpdated INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+            }
+        }
+
         fun getInstance(context: Context): ToDusDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -35,7 +67,7 @@ abstract class ToDusDatabase : RoomDatabase() {
                     ToDusDatabase::class.java,
                     "todus_database"
                 )
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                 INSTANCE = instance
                 instance

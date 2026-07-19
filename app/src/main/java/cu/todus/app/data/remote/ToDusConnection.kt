@@ -28,24 +28,30 @@ class ToDusConnection {
             reader = BufferedReader(InputStreamReader(socket!!.inputStream))
             writer = BufferedWriter(OutputStreamWriter(socket!!.outputStream))
 
+            // 1. Stream
             send(ToDusProtocol.buildStreamOpen())
             readUntil { it.contains("stream:features") }
 
+            // 2. Auth
             send(ToDusProtocol.buildAuthPacket(phone, jwt))
             val authResp = readUntil { ToDusProtocol.isAuthSuccess(it) || ToDusProtocol.isAuthFailure(it) }
             if (!ToDusProtocol.isAuthSuccess(authResp)) { close(); return@withContext Result.failure(Exception("Auth failed")) }
 
+            // 3. Restart stream
             send(ToDusProtocol.buildStreamOpen())
             readUntil { it.contains("stream:features") }
 
+            // 4. Bind
             val resource = "ToDus_${phone.takeLast(4)}"
             send(ToDusProtocol.buildBindIq(resource))
             val bindResp = readUntil { it.contains("jid") || it.contains("error") }
             val jid = ToDusProtocol.extractBindJid(bindResp) ?: "$phone@${ToDusProtocol.DOMAIN}/$resource"
 
+            // 5. Session
             send(ToDusProtocol.buildSessionIq())
             readUntil { it.contains("result") || it.contains("error") }
 
+            // 6. Presence
             send(ToDusProtocol.buildPresence())
 
             Result.success(ToDusSession(socket!!, jid, reader!!, writer!!))
@@ -74,6 +80,7 @@ class ToDusConnection {
 
     private fun send(data: String) { writer?.write(data); writer?.flush() }
 
+    // ⭐ FIX: Leer hasta marcador o timeout
     private fun readUntil(predicate: (String) -> Boolean): String {
         val sb = StringBuilder()
         var char: Int
@@ -87,11 +94,25 @@ class ToDusConnection {
 
     private fun readResponse(): String {
         val sb = StringBuilder()
-        try { var char: Int; while (reader?.read().also { char = it ?: -1 } != -1) { sb.append(char.toChar()) } } catch (_: SocketTimeoutException) {}
+        try {
+            var char: Int
+            while (reader?.read().also { char = it ?: -1 } != -1) {
+                sb.append(char.toChar())
+            }
+        } catch (_: SocketTimeoutException) {}
         return sb.toString()
     }
 
-    fun close() { try { writer?.close() } catch (_: Exception) {}; try { reader?.close() } catch (_: Exception) {}; try { socket?.close() } catch (_: Exception) {} }
+    fun close() {
+        try { writer?.close() } catch (_: Exception) {}
+        try { reader?.close() } catch (_: Exception) {}
+        try { socket?.close() } catch (_: Exception) {}
+    }
 }
 
-data class ToDusSession(val socket: SSLSocket, val jid: String, val reader: BufferedReader, val writer: BufferedWriter)
+data class ToDusSession(
+    val socket: SSLSocket,
+    val jid: String,
+    val reader: BufferedReader,
+    val writer: BufferedWriter
+)

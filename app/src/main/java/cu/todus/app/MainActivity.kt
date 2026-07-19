@@ -12,7 +12,7 @@ import androidx.core.content.ContextCompat
 import cu.todus.app.data.local.JwtManager
 import cu.todus.app.data.local.ToDusDatabase
 import cu.todus.app.data.local.entity.ChatEntity
-import cu.todus.app.data.remote.OfflineManager
+import cu.todus.app.data.remote.ConnectionState
 import cu.todus.app.ui.theme.ToDusTheme
 import cu.todus.app.ui.navigation.NavGraph
 import kotlinx.coroutines.*
@@ -44,13 +44,21 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // ⭐ REACTIVO: Sin delays, observa el estado de conexión
         if (jwtManager.isJwtValid()) {
             startDestination = "home"
             val phone = jwtManager.getPhone() ?: ""
             val jwt = jwtManager.getJwt() ?: ""
+            
             CoroutineScope(Dispatchers.IO).launch {
                 app.xmppClient.connect(phone, jwt)
-                OfflineManager(app.xmppClient, db.messageDao(), db.chatDao()).downloadOfflineMessages()
+                
+                // Observar conexión: cuando CONNECTED, pedir offline
+                app.xmppClient.connectionState.collect { state ->
+                    if (state == ConnectionState.CONNECTED) {
+                        app.xmppClient.requestOfflineMessages()
+                    }
+                }
             }
         } else if (jwtManager.getPhone() != null && jwtManager.isJwtExpired()) {
             startDestination = "home"
@@ -58,7 +66,12 @@ class MainActivity : ComponentActivity() {
                 jwtManager.revalidateJwt().onSuccess { jwt ->
                     val phone = jwtManager.getPhone() ?: return@launch
                     app.xmppClient.connect(phone, jwt)
-                    OfflineManager(app.xmppClient, db.messageDao(), db.chatDao()).downloadOfflineMessages()
+                    
+                    app.xmppClient.connectionState.collect { state ->
+                        if (state == ConnectionState.CONNECTED) {
+                            app.xmppClient.requestOfflineMessages()
+                        }
+                    }
                 }.onFailure {
                     jwtManager.clear()
                     runOnUiThread { recreate() }

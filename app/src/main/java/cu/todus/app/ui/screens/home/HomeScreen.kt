@@ -43,35 +43,31 @@ fun HomeScreen(onChatClick: (String, String) -> Unit, onNewChat: () -> Unit, onP
     val totalUnread = chats.sumOf { it.unreadCount }
     val scope = rememberCoroutineScope()
 
-    // ARREGLO 1: Cargar perfil SIEMPRE al entrar al Home
-    LaunchedEffect(Unit) {
+    // ⭐ REACTIVO: Reacciona al cambio de connectionState, sin bucles while/delay
+    LaunchedEffect(connectionState) {
         val phone = jwtManager.getPhone() ?: return@LaunchedEffect
-        try {
-            var retries = 0
-            while (app.xmppClient.connectionState.value != ConnectionState.CONNECTED && retries < 20) {
-                delay(500); retries++
-            }
-            if (app.xmppClient.connectionState.value == ConnectionState.CONNECTED) {
-                app.xmppClient.requestUserInfo(phone)
-                delay(2000)
+        
+        // Configurar callback del perfil
+        app.xmppClient.onProfileResponse = { stanza ->
+            scope.launch(Dispatchers.IO) {
                 val pm = ProfileManager(app.xmppClient)
                 pm.getProfile(phone).onSuccess { profile ->
                     val alias = profile.alias.ifEmpty { phone }
                     val photo = profile.photoUrl
-                    userName = alias
-                    userAvatar = photo
+                    withContext(Dispatchers.Main) {
+                        userName = alias
+                        userAvatar = photo
+                    }
                     jwtManager.saveProfile(alias, photo, profile.toDusId)
                     jwtManager.saveDescription(profile.description)
                 }
             }
-        } catch (_: Exception) {}
-        
-        // ARREGLO 3: Cargar mensajes offline al entrar
-        try {
-            if (app.xmppClient.connectionState.value == ConnectionState.CONNECTED) {
-                app.xmppClient.requestOfflineMessages()
-            }
-        } catch (_: Exception) {}
+        }
+
+        // Si conectado, pedir perfil
+        if (connectionState == ConnectionState.CONNECTED) {
+            app.xmppClient.requestUserInfo(phone)
+        }
     }
 
     Scaffold(

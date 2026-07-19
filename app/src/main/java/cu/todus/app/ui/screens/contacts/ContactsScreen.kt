@@ -26,19 +26,18 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
     var contacts by remember { mutableStateOf<List<ProfileManager.RosterContact>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }; var isRefreshing by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
+    val connectionState by app.xmppClient.connectionState.collectAsState()
 
     fun loadContacts() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // Cargar cache offline primero
+                // Cache offline primero
                 val cached = db.contactDao().getAllContactsOnce().map {
                     ProfileManager.RosterContact(phone = it.phone, alias = it.alias.ifEmpty { it.name }, photoUrl = it.avatarUrl)
                 }
                 if (cached.isNotEmpty()) { withContext(Dispatchers.Main) { contacts = cached; isLoading = false } }
 
-                var retries = 0
-                while (app.xmppClient.connectionState.value != ConnectionState.CONNECTED && retries < 30) { delay(500); retries++ }
-                if (app.xmppClient.connectionState.value == ConnectionState.CONNECTED) {
+                if (connectionState == ConnectionState.CONNECTED) {
                     val pm = ProfileManager(app.xmppClient, null, db.contactDao())
                     pm.getRosterWithToDusUsers().onSuccess { roster ->
                         withContext(Dispatchers.Main) { contacts = roster.sortedBy { it.alias.lowercase() }; isLoading = false; isRefreshing = false }
@@ -48,8 +47,12 @@ fun ContactsScreen(onBack: () -> Unit, onContactClick: (String, String) -> Unit)
         }
     }
 
-    // ARREGLO 2: Cargar contactos automáticamente al entrar
-    LaunchedEffect(Unit) { loadContacts() }
+    // ⭐ REACTIVO: Cargar contactos cuando conecte
+    LaunchedEffect(connectionState) {
+        if (connectionState == ConnectionState.CONNECTED) {
+            loadContacts()
+        }
+    }
 
     Scaffold(
         topBar = {
