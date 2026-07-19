@@ -35,10 +35,10 @@ import cu.todus.app.data.local.ImageCompressor
 import cu.todus.app.data.local.ToDusDatabase
 import cu.todus.app.data.local.entity.MessageEntity
 import cu.todus.app.data.remote.S3Uploader
+import cu.todus.app.data.remote.ToDusProtocol
 import cu.todus.app.ui.components.MessageBubble
 import cu.todus.app.ui.theme.ToDusColors
 import kotlinx.coroutines.*
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -56,59 +56,25 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
     var uploadProgress by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    // ⭐ Selector de imágenes
+    // ⭐ Selector de IMÁGENES
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            showAttachMenu = false
-            isUploading = true
-            uploadProgress = "Comprimiendo imagen..."
-            
-            scope.launch(Dispatchers.IO) {
-                // 1. Comprimir
-                val compressResult = ImageCompressor.compress(context, it)
-                
-                compressResult.onSuccess { file ->
-                    uploadProgress = "Subiendo a S3..."
-                    
-                    // 2. Subir a S3
-                    val s3 = S3Uploader(app.xmppClient)
-                    val uploadResult = s3.uploadCompressedFile(file, 4)
-                    
-                    uploadResult.onSuccess { urls ->
-                        // 3. Enviar mensaje con URL
-                        val msgId = cu.todus.app.data.remote.ToDusProtocol.randomHex(16)
-                        val msgXml = cu.todus.app.data.remote.ToDusProtocol.buildImageMessage(
-                            to = chatJid,
-                            s3Url = urls.getUrl,
-                            fileName = file.name,
-                            size = file.length()
-                        )
-                        app.xmppClient.sendIq(msgXml)
-                        
-                        withContext(Dispatchers.Main) {
-                            isUploading = false
-                            uploadProgress = ""
-                        }
-                        
-                        // Limpiar archivo temporal
-                        file.delete()
-                    }.onFailure { e ->
-                        withContext(Dispatchers.Main) {
-                            isUploading = false
-                            uploadProgress = "Error: ${e.message}"
-                        }
-                    }
-                }.onFailure { e ->
-                    withContext(Dispatchers.Main) {
-                        isUploading = false
-                        uploadProgress = "Error: ${e.message}"
-                    }
-                }
-            }
-        }
-    }
+    ) { uri: Uri? -> uri?.let { uploadMedia(it, 4, "Imagen", context, app, chatJid, scope) { showAttachMenu = false; isUploading = true } { isUploading = false } { progress -> uploadProgress = progress } } }
+
+    // ⭐ Selector de VIDEO
+    val videoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> uri?.let { uploadMedia(it, 3, "Video", context, app, chatJid, scope) { showAttachMenu = false; isUploading = true } { isUploading = false } { progress -> uploadProgress = progress } } }
+
+    // ⭐ Selector de AUDIO
+    val audioPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> uri?.let { uploadMedia(it, 2, "Audio", context, app, chatJid, scope) { showAttachMenu = false; isUploading = true } { isUploading = false } { progress -> uploadProgress = progress } } }
+
+    // ⭐ Selector de ARCHIVOS
+    val filePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> uri?.let { uploadMedia(it, 0, "Archivo", context, app, chatJid, scope) { showAttachMenu = false; isUploading = true } { isUploading = false } { progress -> uploadProgress = progress } } }
 
     val isAtBottom by remember {
         derivedStateOf {
@@ -152,16 +118,11 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                     }
                 },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White) } },
-                actions = {
-                    IconButton(onClick = { /* Llamada */ }) { Icon(Icons.Default.Call, "Llamar", tint = Color.White) }
-                    IconButton(onClick = { /* Videollamada */ }) { Icon(Icons.Default.Videocam, "Videollamada", tint = Color.White) }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ToDusColors.Red, titleContentColor = Color.White)
             )
         },
         bottomBar = {
             Column {
-                // ⭐ Indicador de subida con texto
                 AnimatedVisibility(visible = isUploading) {
                     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)) {
                         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -207,6 +168,7 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                     }
                 }
 
+                // ⭐ Menú de adjuntar con TODOS los selectores
                 AnimatedVisibility(
                     visible = showAttachMenu,
                     enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
@@ -215,10 +177,9 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, shadowElevation = 4.dp) {
                         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                             AttachOption(Icons.Default.Image, "Imagen") { imagePicker.launch("image/*") }
-                            AttachOption(Icons.Default.Videocam, "Video") { /* TODO */ }
-                            AttachOption(Icons.Default.Audiotrack, "Audio") { /* TODO */ }
-                            AttachOption(Icons.Default.InsertDriveFile, "Archivo") { /* TODO */ }
-                            AttachOption(Icons.Default.LocationOn, "Ubicación") { /* TODO */ }
+                            AttachOption(Icons.Default.Videocam, "Video") { videoPicker.launch("video/*") }
+                            AttachOption(Icons.Default.Audiotrack, "Audio") { audioPicker.launch("audio/*") }
+                            AttachOption(Icons.Default.InsertDriveFile, "Archivo") { filePicker.launch("*/*") }
                         }
                     }
                 }
@@ -252,17 +213,69 @@ fun ChatScreen(chatJid: String, chatName: String, onBack: () -> Unit, onContactP
                             }
                             is MessageEntity -> {
                                 MessageBubble(
-                                    text = item.body,
-                                    time = item.timestamp,
-                                    isMine = item.senderPhone == "me",
-                                    state = item.state,
-                                    mediaUrl = item.mediaUrl,
-                                    mediaType = item.type
+                                    text = item.body, time = item.timestamp,
+                                    isMine = item.senderPhone == "me", state = item.state,
+                                    mediaUrl = item.mediaUrl, mediaType = item.type
                                 )
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+// ⭐ Pipeline genérico para subir cualquier tipo de archivo
+private fun uploadMedia(
+    uri: Uri, fileType: Int, label: String,
+    context: android.content.Context, app: ToDusApp, chatJid: String,
+    scope: CoroutineScope,
+    onStart: () -> Unit, onEnd: () -> Unit, onProgress: (String) -> Unit
+) {
+    onStart()
+    onProgress("Comprimiendo $label...")
+    
+    scope.launch(Dispatchers.IO) {
+        val compressResult = ImageCompressor.compress(context, uri)
+        
+        compressResult.onSuccess { file ->
+            onProgress("Subiendo $label a S3...")
+            val s3 = S3Uploader(app.xmppClient)
+            val uploadResult = s3.uploadCompressedFile(file, fileType)
+            
+            uploadResult.onSuccess { urls ->
+                val fileName = file.name
+                val size = file.length()
+                
+                // Construir XML según tipo
+                val msgXml = when (fileType) {
+                    4 -> ToDusProtocol.buildImageMessage(chatJid, urls.getUrl, fileName, size)
+                    3 -> ToDusProtocol.buildVideoMessage(chatJid, urls.getUrl, fileName, size, 0)
+                    2 -> ToDusProtocol.buildAudioMessage(chatJid, urls.getUrl, fileName, size, 0)
+                    0 -> ToDusProtocol.buildFileMessage(chatJid, urls.getUrl, fileName, size)
+                    else -> ToDusProtocol.buildFileMessage(chatJid, urls.getUrl, fileName, size)
+                }
+                
+                // Enviar mensaje multimedia
+                app.xmppClient.sendIq(msgXml)
+                
+                withContext(Dispatchers.Main) {
+                    onEnd()
+                    onProgress("")
+                }
+                
+                file.delete()
+            }.onFailure { e ->
+                withContext(Dispatchers.Main) {
+                    onEnd()
+                    onProgress("Error: ${e.message}")
+                }
+            }
+        }.onFailure { e ->
+            withContext(Dispatchers.Main) {
+                onEnd()
+                onProgress("Error: ${e.message}")
             }
         }
     }
