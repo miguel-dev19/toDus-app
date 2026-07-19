@@ -48,6 +48,7 @@ fun MessageBubble(
     val borderColor = if (isMine) MaterialTheme.colorScheme.outline.copy(alpha = 0.15f) else Color.Transparent
     val alignment = if (isMine) Alignment.End else Alignment.Start
     val shape = if (isMine) RoundedCornerShape(12.dp, 4.dp, 12.dp, 12.dp) else RoundedCornerShape(4.dp, 12.dp, 12.dp, 12.dp)
+    val progressPercent = (uploadProgress * 100).toInt()
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
@@ -63,7 +64,7 @@ fun MessageBubble(
         ) {
             Column {
                 when {
-                    // ⭐ IMAGEN: progreso circular + X + tamaño
+                    // ⭐ IMAGEN
                     mediaType == "image" -> {
                         Box(modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 250.dp).clip(RoundedCornerShape(8.dp))) {
                             if (isUploading) {
@@ -92,7 +93,7 @@ fun MessageBubble(
                         }
                     }
 
-                    // ⭐ VIDEO: progreso circular + X + tamaño en subida, duración en esquina al cargar
+                    // ⭐ VIDEO
                     mediaType == "video" -> {
                         Box(modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(8.dp))) {
                             if (isUploading) {
@@ -126,7 +127,7 @@ fun MessageBubble(
                         }
                     }
 
-                    // ⭐ AUDIO: progreso circular + X en subida, play + nombre + duración + tamaño al cargar
+                    // ⭐ AUDIO / VOZ
                     mediaType == "audio" || mediaType == "voice" -> {
                         Row(modifier = Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (isUploading) {
@@ -137,7 +138,7 @@ fun MessageBubble(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(text.ifEmpty { "Audio" }, color = textColor, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text("Subiendo... ${formatSize(mediaSize)}", color = textColor.copy(alpha = 0.6f), fontSize = 11.sp)
+                                    Text(formatSize(mediaSize), color = textColor.copy(alpha = 0.6f), fontSize = 11.sp)
                                 }
                             } else {
                                 IconButton(onClick = {}, modifier = Modifier.size(40.dp)) {
@@ -157,7 +158,7 @@ fun MessageBubble(
                         }
                     }
 
-                    // ⭐ ARCHIVO: progreso circular + X en subida, icono + nombre + tamaño al cargar
+                    // ⭐ ARCHIVO
                     mediaType == "file" -> {
                         Row(modifier = Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (isUploading) {
@@ -171,12 +172,12 @@ fun MessageBubble(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(text.ifEmpty { "Archivo" }, color = textColor, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(if (isUploading) "Subiendo..." else formatSize(mediaSize), color = textColor.copy(alpha = 0.6f), fontSize = 11.sp)
+                                Text(formatSize(mediaSize), color = textColor.copy(alpha = 0.6f), fontSize = 11.sp)
                             }
                         }
                     }
 
-                    // ⭐ STICKER: progreso circular + tamaño en subida, imagen sin burbuja al cargar
+                    // ⭐ STICKER
                     mediaType == "sticker" -> {
                         Box(modifier = Modifier.size(120.dp)) {
                             if (isUploading) {
@@ -211,7 +212,7 @@ fun MessageBubble(
                         }
                     }
 
-                    // ⭐ TEXTO normal
+                    // ⭐ TEXTO
                     else -> {
                         if (text.isNotEmpty()) Text(text = text, color = textColor, fontSize = 15.sp, lineHeight = 20.sp)
                     }
