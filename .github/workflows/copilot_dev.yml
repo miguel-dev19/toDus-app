@@ -1,0 +1,59 @@
+name: Copilot_Dev
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  solve:
+    if: contains(github.event.comment.body, '@copilot-dev')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm install axios
+        
+      - name: Ask Copilot
+        run: |
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_BODY="${{ github.event.issue.body }}"
+          
+          node -e "
+          const axios = require('axios');
+          const fs = require('fs');
+          
+          const prompt = 'Issue: ' + process.env.ISSUE_TITLE + '\n\n' + process.env.ISSUE_BODY + '\n\nEscribe el código Kotlin para resolver este Issue. Solo responde con código.';
+          
+          axios.get('https://api.alyacore.xyz/ai/copilot', {
+            params: { text: prompt, key: 'oboe' },
+            timeout: 60000
+          })
+          .then(res => {
+            const solution = res.data.result || res.data.text || JSON.stringify(res.data);
+            fs.writeFileSync('solution.txt', solution);
+            console.log('✅ Solución obtenida');
+          })
+          .catch(err => {
+            console.error('❌ Error:', err.message);
+            process.exit(1);
+          });
+          "
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "🤖 Copilot_Dev: ${{ github.event.issue.title }}"
+          branch: copilot-dev/fix-${{ github.event.issue.number }}
+          title: "🤖 Copilot_Dev: ${{ github.event.issue.title }}"
+          body: |
+            Solución generada por Copilot_Dev para el Issue #${{ github.event.issue.number }}
+            
+            **Prompt:** ${{ github.event.issue.title }}
