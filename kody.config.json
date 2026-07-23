@@ -1,6 +1,8 @@
 {
-  "provider": "google",
-  "model": "gemini-2.0-flash",
+  "provider": "openai",
+  "apiKey": "oboe",
+  "baseUrl": "https://api.alyacore.xyz/ai/copilot",
+  "model": "copilot",
   "maxTokens": 4096,
   "temperature": 0.3
 }
