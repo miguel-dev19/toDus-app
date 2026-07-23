@@ -1,0 +1,14 @@
+name: Kody
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  kody:
+    if: contains(github.event.comment.body, '@kody')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Kody Run
+        uses: kody-engine/kody-action@v1
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
