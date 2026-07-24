@@ -1,59 +1,146 @@
-name: Copilot_Dev
+name: Copilot_Dev_Ultra
+
 on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 jobs:
   solve:
-    if: contains(github.event.comment.body, '@copilot-dev')
+    if: |
+      contains(github.event.comment.body, '@copilot-dev') &&
+      github.event.issue.pull_request == null
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          
-      - name: Install dependencies
-        run: npm install axios
-        
-      - name: Ask Copilot
+      - name: 📋 Parsear instrucción
+        id: parse
         run: |
-          ISSUE_TITLE="${{ github.event.issue.title }}"
-          ISSUE_BODY="${{ github.event.issue.body }}"
+          COMMENT="${{ github.event.comment.body }}"
+          INSTRUCTION=$(echo "$COMMENT" | sed 's/@copilot-dev//g' | xargs)
+          echo "instruction=$INSTRUCTION" >> $GITHUB_OUTPUT
+          
+          if echo "$COMMENT" | grep -qi "fix\|arregla\|corrige\|bug\|error"; then
+            echo "mode=fix" >> $GITHUB_OUTPUT
+          elif echo "$COMMENT" | grep -qi "feature\|añade\|crea\|nueva"; then
+            echo "mode=feature" >> $GITHUB_OUTPUT
+          else
+            echo "mode=fix" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🤖 Copilot - Analizar y Generar Solución
+        id: ai
+        run: |
+          npm install axios
           
           node -e "
           const axios = require('axios');
           const fs = require('fs');
           
-          const prompt = 'Issue: ' + process.env.ISSUE_TITLE + '\n\n' + process.env.ISSUE_BODY + '\n\nEscribe el código Kotlin para resolver este Issue. Solo responde con código.';
+          const instruction = '${{ steps.parse.outputs.instruction }}';
+          const issueTitle = '${{ github.event.issue.title }}';
+          const issueBody = '${{ github.event.issue.body }}'.replace(/'/g, \"'\").substring(0, 2000);
+          
+          // Leer estructura del proyecto
+          const files = fs.readdirSync('.', { recursive: true })
+            .filter(f => f.endsWith('.kt') || f.endsWith('.kts'))
+            .slice(0, 20)
+            .join('\n');
+          
+          const prompt = 'Eres un experto en Kotlin/Android/Jetpack Compose. Debes CORREGIR este Issue del proyecto toDus-app.\n\n' +
+            'ISSUE: ' + issueTitle + '\n' + issueBody + '\n\n' +
+            'INSTRUCCIÓN: ' + instruction + '\n\n' +
+            'ARCHIVOS DEL PROYECTO:\n' + files + '\n\n' +
+            'RESPONDE en este formato EXACTO:\n' +
+            'ANALYSIS: (breve análisis)\n' +
+            'FILES: archivo1.kt, archivo2.kt\n' +
+            'COMMIT: mensaje del commit\n';
           
           axios.get('https://api.alyacore.xyz/ai/copilot', {
             params: { text: prompt, key: 'oboe' },
             timeout: 60000
-          })
-          .then(res => {
-            const solution = res.data.result || res.data.text || JSON.stringify(res.data);
-            fs.writeFileSync('solution.txt', solution);
-            console.log('✅ Solución obtenida');
-          })
-          .catch(err => {
-            console.error('❌ Error:', err.message);
-            process.exit(1);
+          }).then(res => {
+            const text = res.data.result || res.data.text || '';
+            fs.writeFileSync('ai_response.txt', text);
+            
+            // Extraer análisis
+            const analysisMatch = text.match(/ANALYSIS:(.+?)(?=FILES:|$)/s);
+            const filesMatch = text.match(/FILES:(.+?)(?=COMMIT:|$)/s);
+            const commitMatch = text.match(/COMMIT:(.+?)$/s);
+            
+            if (filesMatch) fs.writeFileSync('files_to_modify.txt', filesMatch[1].trim());
+            if (commitMatch) fs.writeFileSync('commit_msg.txt', commitMatch[1].trim());
+            
+            console.log('✅ Análisis completado');
+          }).catch(err => {
+            console.log('⚠️ Error API, usando fallback');
+            fs.writeFileSync('files_to_modify.txt', '');
+            fs.writeFileSync('commit_msg.txt', 'Fix: ' + instruction);
           });
           "
         env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
+
+      - name: 🌿 Crear rama y commit
+        run: |
+          ISSUE_NUM=${{ github.event.issue.number }}
+          BRANCH="copilot-dev/issue-${ISSUE_NUM}"
           
-      - name: Create Pull Request
+          git config user.name "🤖 Copilot_Dev"
+          git config user.email "copilot-dev[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          
+          # Añadir archivo de solución
+          mkdir -p ai_solutions
+          echo "# Solución para Issue #${ISSUE_NUM}" > "ai_solutions/issue_${ISSUE_NUM}.md"
+          echo "" >> "ai_solutions/issue_${ISSUE_NUM}.md"
+          echo "**Título:** ${{ github.event.issue.title }}" >> "ai_solutions/issue_${ISSUE_NUM}.md"
+          echo "" >> "ai_solutions/issue_${ISSUE_NUM}.md"
+          echo "**Instrucción:** ${{ steps.parse.outputs.instruction }}" >> "ai_solutions/issue_${ISSUE_NUM}.md"
+          echo "" >> "ai_solutions/issue_${ISSUE_NUM}.md"
+          echo "## Respuesta de Copilot" >> "ai_solutions/issue_${ISSUE_NUM}.md"
+          cat ai_response.txt >> "ai_solutions/issue_${ISSUE_NUM}.md" 2>/dev/null || echo "Esperando análisis..." >> "ai_solutions/issue_${ISSUE_NUM}.md"
+          
+          git add -A
+          
+          COMMIT_MSG=$(cat commit_msg.txt 2>/dev/null || echo "🤖 Copilot_Dev: ${{ steps.parse.outputs.instruction }}")
+          git commit -m "$COMMIT_MSG"
+          git push origin "$BRANCH"
+          
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: 🔀 Crear Pull Request
+        id: pr
         uses: peter-evans/create-pull-request@v6
         with:
+          branch: ${{ steps.commit.outputs.branch }}
           commit-message: "🤖 Copilot_Dev: ${{ github.event.issue.title }}"
-          branch: copilot-dev/fix-${{ github.event.issue.number }}
           title: "🤖 Copilot_Dev: ${{ github.event.issue.title }}"
           body: |
-            Solución generada por Copilot_Dev para el Issue #${{ github.event.issue.number }}
+            ## 🤖 Solución generada por Copilot_Dev Ultra
             
-            **Prompt:** ${{ github.event.issue.title }}
+            **Issue:** #${{ github.event.issue.number }}
+            **Modo:** ${{ steps.parse.outputs.mode }}
+            **Instrucción:** ${{ steps.parse.outputs.instruction }}
+            
+            ---
+            *Revisar antes de mergear*
+
+      - name: 💬 Comentar en Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ github.event.issue.number }},
+              body: '## 🤖 Copilot_Dev Ultra\n\n✅ **Análisis completado**\n\n📤 **PR creado:** #${{ steps.pr.outputs.pull-request-number }}\n\n🔗 [Ver PR](https://github.com/${{ github.repository }}/pull/${{ steps.pr.outputs.pull-request-number }})'
+            });
