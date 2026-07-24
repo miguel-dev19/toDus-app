@@ -1,7 +1,7 @@
 # Registro de Cambios
 
-## v0.6.47 - 23/07/2026
+## v0.6.48 - 24/07/2026
 
 ### Otros Cambios
-- Reemplazar Kody con Copilot_Dev (bot personalizado con API alyacore)
+- Copilot_Dev Ultra: analiza Issues, genera soluciones con IA, crea PRs automáticos
 
