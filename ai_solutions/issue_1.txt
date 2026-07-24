@@ -1,0 +1,2 @@
+ANALYSIS: Error contacting AI
+COMMIT_MSG: Fix: 🐛 Datos no se reflejan en la UI - Handshake funciona pero chats/contactos/perfil vacíos
