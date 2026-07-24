@@ -17,17 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Get Issue Content
+      - uses: actions/github-script@v7
         id: issue
-        uses: actions/github-script@v7
         with:
           script: |
             const issue = await github.rest.issues.get({
@@ -35,101 +28,37 @@ jobs:
               repo: context.repo.repo,
               issue_number: context.issue.number
             });
-            const comment = context.payload.comment.body.replace('@copilot-dev', '').trim();
             return {
               title: issue.data.title,
-              instruction: comment || issue.data.title
+              body: issue.data.body.substring(0, 500)
             };
 
-      - name: AI Analysis & Fix
-        run: |
+      - run: |
           npm install axios
           
-          cat > ask_ai.js << 'JSEOF'
+          cat > ask.js << 'EOF'
           const axios = require('axios');
           const fs = require('fs');
-          
-          const instruction = process.env.INSTRUCTION || 'fix this issue';
-          const title = process.env.TITLE || 'Issue';
-          const repoFiles = fs.readdirSync('.', { recursive: true })
-            .filter(f => f.endsWith('.kt'))
-            .slice(0, 15)
-            .join(', ');
-          
-          const prompt = `Eres un desarrollador Kotlin/Android experto. Debes resolver este issue del proyecto toDus-app.
-          
-          TITULO: ${title}
-          INSTRUCCION: ${instruction}
-          ARCHIVOS: ${repoFiles}
-          
-          Responde en este formato exacto:
-          ANALYSIS: (breve analisis)
-          COMMIT_MSG: (mensaje para el commit)`;
+          const prompt = `Fix this Kotlin issue: ${process.env.TITLE}. ${process.env.BODY}`;
           
           axios.get('https://api.alyacore.xyz/ai/copilot', {
             params: { text: prompt, key: 'oboe' },
             timeout: 60000
           }).then(res => {
-            const text = res.data.result || res.data.text || res.data.response || JSON.stringify(res.data);
-            fs.writeFileSync('ai_response.txt', text);
-            console.log('OK');
-          }).catch(err => {
-            fs.writeFileSync('ai_response.txt', 'ANALYSIS: Error contacting AI\nCOMMIT_MSG: Fix: ' + instruction);
-            console.log('FALLBACK');
+            fs.writeFileSync('solution.txt', res.data.result || res.data.text || 'No response');
+          }).catch(() => {
+            fs.writeFileSync('solution.txt', 'AI analysis pending');
           });
-          JSEOF
+          EOF
           
-          node ask_ai.js
+          node ask.js
         env:
           TITLE: ${{ fromJson(steps.issue.outputs.result).title }}
-          INSTRUCTION: ${{ fromJson(steps.issue.outputs.result).instruction }}
+          BODY: ${{ fromJson(steps.issue.outputs.result).body }}
 
-      - name: Commit and Create PR
-        run: |
-          ISSUE_NUM=${{ github.event.issue.number }}
-          BRANCH="copilot-dev/issue-${ISSUE_NUM}"
-          
-          git config user.name "Copilot_Dev"
-          git config user.email "bot@copilot.dev"
-          git checkout -b "$BRANCH"
-          
-          mkdir -p ai_solutions
-          cp ai_response.txt "ai_solutions/issue_${ISSUE_NUM}.txt"
-          
-          git add -A
-          
-          COMMIT_MSG=$(grep "COMMIT_MSG:" ai_response.txt | sed 's/COMMIT_MSG: //' || echo "Fix: ${{ fromJson(steps.issue.outputs.result).instruction }}")
-          git commit -m "$COMMIT_MSG" || echo "No changes"
-          git push origin "$BRANCH" || echo "Branch exists"
-          
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
-
-      - name: Create Pull Request
+      - name: Create PR
         uses: peter-evans/create-pull-request@v6
         with:
-          branch: ${{ steps.commit.outputs.branch }}
+          commit-message: "🤖 Copilot_Dev analysis"
           title: "🤖 Copilot_Dev: ${{ fromJson(steps.issue.outputs.result).title }}"
-          body: |
-            ## 🤖 Solución de Copilot_Dev
-            
-            **Issue:** #${{ github.event.issue.number }}
-            **Instrucción:** ${{ fromJson(steps.issue.outputs.result).instruction }}
-            
-            ### Respuesta de IA:
-            ```
-            $(cat ai_response.txt)
-            ```
-            
-            ---
-            *Revisar antes de mergear*
-
-      - name: Comment on Issue
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: ${{ github.event.issue.number }},
-              body: '## 🤖 Copilot_Dev\n\n✅ Análisis completado\n\n📤 PR creado\n\n🔗 [Ver Actions](' + process.env.GITHUB_SERVER_URL + '/' + process.env.GITHUB_REPOSITORY + '/actions/runs/' + process.env.GITHUB_RUN_ID + ')'
-            });
+          body: "Solución generada automáticamente para #${{ github.event.issue.number }}"
